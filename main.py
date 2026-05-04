@@ -1,5 +1,5 @@
-from controller import Controller
-from view import View
+from references.controller import Controller
+from main_view import View
 from PyQt6.QtWidgets import QApplication, QMessageBox
 import sys
 import traceback

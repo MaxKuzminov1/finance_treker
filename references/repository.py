@@ -1,6 +1,6 @@
 import MySQLdb
 from MySQLdb.cursors import DictCursor
-from config import DB_CONFIG
+from .config import DB_CONFIG
 from MySQLdb import OperationalError
 
 
