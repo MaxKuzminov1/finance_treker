@@ -1,398 +1,275 @@
+# main_view.py
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTableWidget, QTableWidgetItem, QLineEdit,
-    QComboBox, QLabel, QDateEdit, QListWidget, QFrame,
-    QGraphicsDropShadowEffect, QMessageBox, QStackedWidget
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
+    QGraphicsDropShadowEffect, QStackedWidget, QScrollArea,
+    QPushButton, QButtonGroup
 )
-from PyQt6.QtCore import QDate, Qt, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QColor, QLinearGradient, QBrush, QPalette
-from references.form import TransactionForm
-from datetime import datetime
+from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty
+from PyQt6.QtGui import QColor, QFont
+
 from references.Module1Widget import Module1Widget
 from transactions.Module4Widget import Module4Widget
 from budget.Module2Widget import Module2Widget
 from analytics.Module3Widget import Module3Widget
-from references.AnimatedButton import AnimatedButton
-from transactions.controller import ReferencesController
+
+
+class ModuleButton(QPushButton):
+    """Карточка модуля с анимацией тени при наведении."""
+
+    def __init__(self, icon: str, title: str, subtitle: str, parent=None):
+        super().__init__(parent)
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self._shadow_radius = 8       # начальный радиус тени
+        self._shadow_color = QColor(0, 0, 0, 20)  # полупрозрачная чёрная тень
+        self._shadow_effect = QGraphicsDropShadowEffect()
+        self._shadow_effect.setBlurRadius(self._shadow_radius)
+        self._shadow_effect.setColor(self._shadow_color)
+        self._shadow_effect.setOffset(0, 2)
+        self.setGraphicsEffect(self._shadow_effect)
+
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(64)
+        self.setFlat(True)
+        self.update_style()
+
+    def update_style(self):
+        """Пересоздаём таблицу стилей в зависимости от выделения."""
+        selected = self.isChecked()
+        bg = """
+            qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                            stop:0 #6C5CE7, stop:1 #4F46E5)
+        """ if selected else "#FFFFFF"
+        text_color = "#FFFFFF" if selected else "#1E293B"
+        subtitle_color = "rgba(255,255,255,0.7)" if selected else "#64748B"
+        self.setStyleSheet(f"""
+            ModuleButton {{
+                background: {bg};
+                border-radius: 16px;
+                padding: 12px 16px;
+                text-align: left;
+                font-size: 14px;
+                font-weight: 600;
+                color: {text_color};
+                border: none;
+            }}
+            ModuleButton:hover {{
+                background: {"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6C5CE7, stop:1 #4F46E5)" if not selected else bg};
+                color: white;
+            }}
+            ModuleButton:hover:checked {{
+                background: {bg};
+            }}
+        """)
+        # Подзаголовок будем рисовать через label внутри layout,
+        # а текст задаём через QPushButton text – упрощённо, оставим только иконку и название.
+        self.setText(f"  {self.icon}  {self.title}")
+
+    def enterEvent(self, event):
+        self.animate_shadow(18)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.animate_shadow(8)
+        super().leaveEvent(event)
+
+    def animate_shadow(self, target_radius: int):
+        """Плавная анимация размытия тени."""
+        self.anim = QPropertyAnimation(self._shadow_effect, b"blurRadius")
+        self.anim.setDuration(250)
+        self.anim.setStartValue(self._shadow_effect.blurRadius())
+        self.anim.setEndValue(target_radius)
+        self.anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.anim.start()
+
+    # Для корректного выделения (взаимоисключающего) используем QButtonGroup
+    def setChecked(self, checked: bool):
+        super().setChecked(checked)
+        self.update_style()
+
 
 class View(QWidget):
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
-
         self.setWindowTitle("Программа комплексного учёта доходов и расходов малого бизнеса")
         self.resize(1400, 850)
         self.setMinimumSize(1200, 700)
+        self.setObjectName("main_window")
 
-        # Главный layout
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # =========================
-        # SIDEBAR
-        # =========================
+        # ========================= SIDEBAR =========================
         sidebar = QFrame()
-        sidebar.setFixedWidth(280)
+        sidebar.setFixedWidth(260)
         sidebar.setObjectName("sidebar")
-
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 80))
-        shadow.setOffset(4, 0)
+        shadow.setColor(QColor(0, 0, 0, 25))
+        shadow.setOffset(2, 0)
         sidebar.setGraphicsEffect(shadow)
 
         sidebar_layout = QVBoxLayout()
-        sidebar_layout.setSpacing(25)
-        sidebar_layout.setContentsMargins(20, 35, 20, 35)
+        sidebar_layout.setSpacing(16)
+        sidebar_layout.setContentsMargins(16, 30, 16, 20)
 
         # Логотип
-        logo_container = QLabel()
-        logo_container.setText("💰 FINANCE PRO")
-        logo_container.setObjectName("logo")
-        sidebar_layout.addWidget(logo_container)
+        logo = QLabel("💰 FINANCE PRO")
+        logo.setObjectName("logo")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sidebar_layout.addWidget(logo)
 
-        # Декоративная линия
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setObjectName("sidebar_line")
+        line.setStyleSheet("background-color: #E2E8F0; max-height: 1px;")
         sidebar_layout.addWidget(line)
 
         # Модули
-        modules_label = QLabel("МОДУЛИ")
-        modules_label.setObjectName("modules_label")
-        sidebar_layout.addWidget(modules_label)
+        modules_scroll = QScrollArea()
+        modules_scroll.setWidgetResizable(True)
+        modules_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        modules_scroll.setStyleSheet("""
+            QScrollArea { border: none; background: transparent; }
+            QScrollBar:vertical {
+                background: #F1F5F9;
+                width: 6px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: #A5B4FC;
+                border-radius: 3px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover { background: #818CF8; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+        """)
 
-        self.menu = QListWidget()
-        self.menu.addItems([
-            "📊 Учёт операций",
-            "💰 Управление бюджетом",
-            "📈 Аналитика и отчётность",
-            "📚 Справочники"
-        ])
-        self.menu.setObjectName("menu_list")
-        self.menu.setCurrentRow(0)
-        sidebar_layout.addWidget(self.menu)
+        modules_widget = QWidget()
+        modules_widget.setObjectName("modules_container")
+        modules_layout = QVBoxLayout()
+        modules_layout.setSpacing(10)
+        modules_layout.setContentsMargins(0, 0, 0, 0)
 
-        sidebar_layout.addStretch()
+        self.module_buttons = []
+        self.btn_group = QButtonGroup()
+        self.btn_group.setExclusive(True)
 
-        # Информация о программе
+        modules_data = [
+            ("📊", "Учёт операций", "Доходы / расходы"),
+            ("💰", "Управление бюджетом", "Планирование"),
+            ("📈", "Аналитика и отчётность", "KPI / графики"),
+            ("📚", "Справочники", "Категории, подрядчики"),
+        ]
+        for icon, title, subtitle in modules_data:
+            btn = ModuleButton(icon, title, subtitle)
+            btn.setCheckable(True)
+            modules_layout.addWidget(btn)
+            self.module_buttons.append(btn)
+            self.btn_group.addButton(btn)
+
+        modules_widget.setLayout(modules_layout)
+        modules_scroll.setWidget(modules_widget)
+        sidebar_layout.addWidget(modules_scroll)
+
+        # Блок "О программе"
         info_frame = QFrame()
         info_frame.setObjectName("info_frame")
         info_layout = QVBoxLayout()
-
-        prog_label = QLabel("ℹ️ О программе")
-        prog_label.setObjectName("info_title")
-        info_layout.addWidget(prog_label)
-
-        info1 = QLabel("• Локальная база данных")
-        info2 = QLabel("• Работа без интернета")
-        info3 = QLabel("• Автосохранение")
-        info1.setObjectName("info_text")
-        info2.setObjectName("info_text")
-        info3.setObjectName("info_text")
-
-        info_layout.addWidget(info1)
-        info_layout.addWidget(info2)
-        info_layout.addWidget(info3)
+        info_layout.setSpacing(6)
+        info_title = QLabel("ℹ️ О программе")
+        info_title.setStyleSheet("color: #4F46E5; font-weight: 700; font-size: 12px;")
+        info_layout.addWidget(info_title)
+        for text in ["• Локальная база данных", "• Работа без интернета", "• Автосохранение"]:
+            lbl = QLabel(text)
+            lbl.setStyleSheet("color: #64748B; font-size: 11px;")
+            info_layout.addWidget(lbl)
         info_frame.setLayout(info_layout)
+        info_frame.setStyleSheet("""
+            #info_frame {
+                background-color: #F8FAFC;
+                border-radius: 16px;
+                padding: 16px;
+                border: 1px solid #E2E8F0;
+            }
+        """)
         sidebar_layout.addWidget(info_frame)
-
         sidebar.setLayout(sidebar_layout)
 
-        # =========================
-        # STACKED WIDGET (для переключения модулей)
-        # =========================
+        # ========================= STACKED WIDGET =========================
         self.stacked_widget = QStackedWidget()
 
-        # Создаём виджеты для каждого модуля
         self.module1 = Module1Widget(controller)
         self.module2 = Module2Widget(controller)
         self.module3 = Module3Widget(controller)
         self.module4 = Module4Widget(controller)
 
-        # Добавляем в стек
-        self.stacked_widget.addWidget(self.module1)  # индекс 0
-        self.stacked_widget.addWidget(self.module2)  # индекс 1
-        self.stacked_widget.addWidget(self.module3)  # индекс 2
-        self.stacked_widget.addWidget(self.module4)  # индекс 3
+        self.stacked_widget.addWidget(self.module1)
+        self.stacked_widget.addWidget(self.module2)
+        self.stacked_widget.addWidget(self.module3)
+        self.stacked_widget.addWidget(self.module4)
 
-        # Подключаем сигнал переключения меню
-        self.menu.currentRowChanged.connect(self.stacked_widget.setCurrentIndex)
+        # Синхронизация выбора модуля с кнопками
+        self.btn_group.buttonClicked.connect(self.on_module_selected)
+
+        # По умолчанию – первый модуль
+        self.module_buttons[0].setChecked(True)
+        self.stacked_widget.setCurrentIndex(0)
 
         main_layout.addWidget(sidebar)
         main_layout.addWidget(self.stacked_widget, 1)
-
         self.setLayout(main_layout)
         self.apply_styles()
 
+    def on_module_selected(self, btn):
+        idx = self.module_buttons.index(btn)
+        self.stacked_widget.setCurrentIndex(idx)
+
     def apply_styles(self):
         self.setStyleSheet("""
-        QWidget {
-            background-color: #f8f9fc;
-            font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-
-        #sidebar {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #0f0c29, stop:0.5 #302b63, stop:1 #24243e);
-            border-right: none;
-        }
-
-        #logo {
-            font-size: 26px;
-            font-weight: bold;
-            color: #00d2ff;
-            padding: 10px 0px;
-            letter-spacing: 1px;
-        }
-
-        #sidebar_line {
-            background-color: rgba(255, 255, 255, 0.1);
-            max-height: 1px;
-        }
-
-        #modules_label {
-            font-size: 11px;
-            letter-spacing: 2px;
-            color: #a8b2c9;
-            margin-top: 10px;
-            margin-bottom: 5px;
-        }
-
-        #menu_list {
-            background-color: transparent;
-            border: none;
-            color: #c4c4e6;
-            font-size: 14px;
-            outline: none;
-        }
-
-        #menu_list::item {
-            padding: 12px 15px;
-            border-radius: 12px;
-            margin: 4px 0px;
-            background-color: transparent;
-            color: #c4c4e6;
-        }
-
-        #menu_list::item:selected {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #00d2ff, stop:1 #3a7bd5);
-            color: white;
-        }
-
-        #menu_list::item:hover {
-            background-color: rgba(0, 210, 255, 0.2);
-            color: white;
-        }
-
-        #info_frame {
-            background-color: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            padding: 15px;
-            margin-top: 10px;
-        }
-
-        #info_title {
-            color: #00d2ff;
-            font-size: 11px;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-
-        #info_text {
-            color: #a8b2c9;
-            font-size: 11px;
-            margin: 4px 0px;
-        }
-
-        #header {
-            border-radius: 20px;
-            padding: 25px 30px;
-        }
-
-        #title {
-            font-size: 28px;
-            font-weight: bold;
-            color: #2c3e50;
-            letter-spacing: -0.5px;
-        }
-
-        #subtitle {
-            font-size: 13px;
-            color: #7f8c8d;
-            margin-top: 5px;
-        }
-
-        #filter_card, #table_card {
-            background-color: white;
-            border-radius: 20px;
-            border: none;
-        }
-
-        #search_label {
-            font-size: 14px;
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        }
-
-        #search_input {
-            background-color: #f8f9fc;
-            border: 2px solid #e1e8ed;
-            border-radius: 12px;
-            padding: 12px 15px;
-            font-size: 13px;
-            color: #2c3e50;
-        }
-
-        #search_input:focus {
-            border-color: #3498db;
-            background-color: white;
-        }
-
-        #period_widget, #category_widget {
-            background-color: #f8f9fc;
-            border-radius: 12px;
-            padding: 8px 15px;
-        }
-
-        .filter_label, #filter_label {
-            font-size: 13px;
-            font-weight: 500;
-            color: #7f8c8d;
-        }
-
-        #date_edit, #category_combo {
-            background-color: white;
-            border: 1px solid #dcdde1;
-            border-radius: 10px;
-            padding: 8px 12px;
-            min-width: 120px;
-            font-size: 12px;
-            color: #2c3e50;
-        }
-
-        #date_edit:focus, #category_combo:focus {
-            border-color: #3498db;
-        }
-
-        #date_sep {
-            font-weight: bold;
-            color: #3498db;
-            margin: 0px 5px;
-        }
-
-        #action_btn {
-            border: none;
-            border-radius: 10px;
-            padding: 8px 12px;
-            font-weight: 600;
-            font-size: 11px;
-        }
-
-        #action_btn[class="primary"] {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #3498db, stop:1 #2980b9);
-            color: white;
-            padding: 8px 18px;
-            font-size: 12px;
-        }
-
-        #action_btn[class="warning"] {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #f39c12, stop:1 #e67e22);
-            color: white;
-        }
-
-        #action_btn[class="danger"] {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #e74c3c, stop:1 #c0392b);
-            color: white;
-        }
-
-        #action_btn[class="success"] {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #27ae60, stop:1 #229954);
-            color: white;
-        }
-
-        #action_btn[class="secondary"] {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #95a5a6, stop:1 #7f8c8d);
-            color: white;
-        }
-
-        #table_title {
-            font-size: 18px;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-
-        #records_count_badge {
-            background-color: #ecf0f1;
-            padding: 6px 15px;
-            border-radius: 20px;
-            font-size: 12px;
-            color: #7f8c8d;
-            font-weight: 500;
-        }
-
-        #data_table {
-            background-color: white;
-            border: none;
-            alternate-background-color: #fafbfc;
-            gridline-color: #e1e8ed;
-            border-radius: 12px;
-        }
-
-        #data_table::item {
-            padding: 12px;
-            color: #2c3e50;
-        }
-
-        #data_table::item:selected {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #3498db, stop:1 #2980b9);
-            color: white;
-        }
-
-        QHeaderView::section {
-            background-color: #f1f2f6;
-            padding: 15px;
-            border: none;
-            border-bottom: 2px solid #e1e8ed;
-            font-weight: bold;
-            font-size: 12px;
-            color: #2c3e50;
-        }
-
-        QTableCornerButton::section {
-            background-color: #f1f2f6;
-            border: none;
-        }
-
-        QScrollBar:vertical {
-            background: #f0f2f5;
-            width: 10px;
-            border-radius: 5px;
-        }
-
-        QScrollBar::handle:vertical {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #3498db, stop:1 #2980b9);
-            border-radius: 5px;
-            min-height: 30px;
-        }
-
-        QScrollBar::handle:vertical:hover {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #2980b9, stop:1 #2471a3);
-        }
-
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-            border: none;
-            background: none;
-        }
+            #main_window {
+                background-color: #F5F6FA;
+            }
+            QWidget {
+                font-family: 'Segoe UI';
+                font-size: 14px;
+                color: #1E293B;
+            }
+            #sidebar {
+                background-color: white;
+                border-right: 1px solid #E2E8F0;
+            }
+            #logo {
+                font-size: 22px;
+                font-weight: 700;
+                color: #4F46E5;
+                padding: 15px 10px;
+            }
+            QTableWidget {
+                background-color: white;
+                border: none;
+                border-radius: 12px;
+                gridline-color: #F1F5F9;
+            }
+            QHeaderView::section {
+                background-color: #F8FAFC;
+                border: none;
+                border-bottom: 1px solid #E2E8F0;
+                padding: 12px;
+                font-weight: 700;
+            }
+            QScrollBar:vertical {
+                background: #F1F5F9;
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #CBD5E1;
+                border-radius: 4px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover { background: #94A3B8; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)
