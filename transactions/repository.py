@@ -3,23 +3,20 @@ from MySQLdb.cursors import DictCursor
 from references.config import DB_CONFIG
 from .models import Category, Counterparty, User, Role, AppSettings, CategoryType, UserStatus
 from typing import Optional, List
+
 class ReferencesRepository:
     def __init__(self):
         try:
-            self.conn = MySQLdb.connect(
-                cursorclass=DictCursor,
-                autocommit=True,
-                **DB_CONFIG
-            )
+            self.conn = MySQLdb.connect(cursorclass=DictCursor, autocommit=True, **DB_CONFIG)
         except Exception as e:
-            print(f"❌ Ошибка подключения ReferencesRepository: {e}")
+            print(f"❌ Ошибка подключения: {e}")
             raise
 
     # ---------- Категории ----------
     def get_all_categories(self) -> list:
         cur = self.conn.cursor()
         try:
-            cur.execute("SELECT id, name, type, parent_id FROM categories ORDER BY name")
+            cur.execute("SELECT id, name, type, parent_id, monthly_limit FROM categories ORDER BY name")
             return [Category(**row) for row in cur.fetchall()]
         finally:
             cur.close()
@@ -27,7 +24,7 @@ class ReferencesRepository:
     def get_category_by_id(self, cat_id: int) -> Optional[Category]:
         cur = self.conn.cursor()
         try:
-            cur.execute("SELECT id, name, type, parent_id FROM categories WHERE id=%s", (cat_id,))
+            cur.execute("SELECT id, name, type, parent_id, monthly_limit FROM categories WHERE id=%s", (cat_id,))
             row = cur.fetchone()
             return Category(**row) if row else None
         finally:
@@ -37,8 +34,8 @@ class ReferencesRepository:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO categories (name, type, parent_id) VALUES (%s,%s,%s)",
-                (cat.name, cat.type.value, cat.parent_id)
+                "INSERT INTO categories (name, type, parent_id, monthly_limit) VALUES (%s,%s,%s,%s)",
+                (cat.name, cat.type.value, cat.parent_id, cat.monthly_limit)
             )
             return cur.lastrowid
         finally:
@@ -48,8 +45,8 @@ class ReferencesRepository:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "UPDATE categories SET name=%s, type=%s, parent_id=%s WHERE id=%s",
-                (cat.name, cat.type.value, cat.parent_id, cat.id)
+                "UPDATE categories SET name=%s, type=%s, parent_id=%s, monthly_limit=%s WHERE id=%s",
+                (cat.name, cat.type.value, cat.parent_id, cat.monthly_limit, cat.id)
             )
         finally:
             cur.close()
@@ -57,21 +54,22 @@ class ReferencesRepository:
     def delete_category(self, cat_id: int) -> bool:
         cur = self.conn.cursor()
         try:
-            # проверяем использование в транзакциях
             cur.execute("SELECT COUNT(*) as cnt FROM transaction_items WHERE category_id=%s", (cat_id,))
-            cnt = cur.fetchone()["cnt"]
-            if cnt > 0:
-                return False
+            if cur.fetchone()["cnt"] > 0: return False
             cur.execute("DELETE FROM categories WHERE id=%s", (cat_id,))
             return True
         finally:
             cur.close()
 
-    def is_category_used(self, cat_id: int) -> bool:
+    def merge_categories(self, source_id: int, target_id: int):
         cur = self.conn.cursor()
         try:
-            cur.execute("SELECT COUNT(*) as cnt FROM transaction_items WHERE category_id=%s", (cat_id,))
-            return cur.fetchone()["cnt"] > 0
+            # Перепривязываем транзакции
+            cur.execute("UPDATE transaction_items SET category_id=%s WHERE category_id=%s", (target_id, source_id))
+            # Перепривязываем дочерние категории
+            cur.execute("UPDATE categories SET parent_id=%s WHERE parent_id=%s", (target_id, source_id))
+            # Удаляем старую
+            cur.execute("DELETE FROM categories WHERE id=%s", (source_id,))
         finally:
             cur.close()
 
@@ -79,7 +77,7 @@ class ReferencesRepository:
     def get_all_counterparties(self) -> list:
         cur = self.conn.cursor()
         try:
-            cur.execute("SELECT id, name, type, contact_info, address, requisites, comment FROM counterparties ORDER BY name")
+            cur.execute("SELECT id, name, type, contact_info, address, requisites, comment, parent_id FROM counterparties ORDER BY name")
             return [Counterparty(**row) for row in cur.fetchall()]
         finally:
             cur.close()
@@ -87,7 +85,7 @@ class ReferencesRepository:
     def get_counterparty_by_id(self, cp_id: int) -> Optional[Counterparty]:
         cur = self.conn.cursor()
         try:
-            cur.execute("SELECT id, name, type, contact_info, address, requisites, comment FROM counterparties WHERE id=%s", (cp_id,))
+            cur.execute("SELECT id, name, type, contact_info, address, requisites, comment, parent_id FROM counterparties WHERE id=%s", (cp_id,))
             row = cur.fetchone()
             return Counterparty(**row) if row else None
         finally:
@@ -97,8 +95,8 @@ class ReferencesRepository:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO counterparties (name, type, contact_info, address, requisites, comment) VALUES (%s,%s,%s,%s,%s,%s)",
-                (cp.name, cp.type, cp.contact_info, cp.address, cp.requisites, cp.comment)
+                "INSERT INTO counterparties (name, type, contact_info, address, requisites, comment, parent_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (cp.name, cp.type, cp.contact_info, cp.address, cp.requisites, cp.comment, cp.parent_id)
             )
             return cur.lastrowid
         finally:
@@ -108,8 +106,8 @@ class ReferencesRepository:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "UPDATE counterparties SET name=%s, type=%s, contact_info=%s, address=%s, requisites=%s, comment=%s WHERE id=%s",
-                (cp.name, cp.type, cp.contact_info, cp.address, cp.requisites, cp.comment, cp.id)
+                "UPDATE counterparties SET name=%s, type=%s, contact_info=%s, address=%s, requisites=%s, comment=%s, parent_id=%s WHERE id=%s",
+                (cp.name, cp.type, cp.contact_info, cp.address, cp.requisites, cp.comment, cp.parent_id, cp.id)
             )
         finally:
             cur.close()
@@ -117,12 +115,35 @@ class ReferencesRepository:
     def delete_counterparty(self, cp_id: int) -> bool:
         cur = self.conn.cursor()
         try:
-            # здесь связь с транзакциями не предусмотрена, можно удалять
             cur.execute("DELETE FROM counterparties WHERE id=%s", (cp_id,))
             return True
         finally:
             cur.close()
 
+    def get_counterparty_summary(self, cp_id: int) -> dict:
+        cur = self.conn.cursor()
+        try:
+            # Заглушка запроса к таблице транзакций (замените названия полей под вашу БД)
+            cur.execute("""
+                SELECT 
+                    SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) as total_paid,
+                    SUM(CASE WHEN type='income' THEN amount ELSE -amount END) as current_debt,
+                    MAX(date) as last_date
+                FROM transactions 
+                WHERE counterparty_id=%s
+            """, (cp_id,))
+            row = cur.fetchone()
+            return {
+                "total_paid": row.get("total_paid") or 0.0,
+                "current_debt": row.get("current_debt") or 0.0,
+                "last_date": row.get("last_date")
+            }
+        except:
+            return {"total_paid": 0.0, "current_debt": 0.0, "last_date": None}
+        finally:
+            cur.close()
+
+    # (Методы пользователей, ролей и настроек остаются без изменений)
     # ---------- Пользователи ----------
     def get_all_users(self) -> list:
         cur = self.conn.cursor()

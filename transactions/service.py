@@ -2,6 +2,7 @@ import hashlib
 from .models import Category, Counterparty, User, AppSettings, CategoryType, UserStatus
 from .repository import ReferencesRepository
 
+
 class ReferencesService:
     def __init__(self, repo: ReferencesRepository):
         self.repo = repo
@@ -12,12 +13,12 @@ class ReferencesService:
         cat_map = {c.id: c for c in all_cats}
         roots = []
         for c in all_cats:
-            if c.parent_id and c.parent_id in cat_map:
+            # ЗАЩИТА: проверяем, что родитель существует и не является самой этой категорией
+            if c.parent_id and c.parent_id in cat_map and c.parent_id != c.id:
                 cat_map[c.parent_id].children.append(c)
             else:
                 c.parent_id = None
                 roots.append(c)
-        # Убираем детей из корневого списка, если они уже вложены
         return [c for c in roots if c.parent_id is None]
 
     def validate_category(self, cat: Category):
@@ -43,7 +44,29 @@ class ReferencesService:
         self.repo.delete_category(cat_id)
         self.repo.log_action("category", cat_id, "delete")
 
+    def merge_categories(self, source_id: int, target_id: int):
+        if source_id == target_id:
+            raise ValueError("Нельзя слить категорию саму с собой")
+        self.repo.merge_categories(source_id, target_id)
+        self.repo.log_action("category", target_id, f"merged with {source_id}")
+
     # ---------- Контрагенты ----------
+    def get_counterparty_tree(self):
+        all_cps = self.repo.get_all_counterparties()
+        cp_map = {c.id: c for c in all_cps}
+        roots = []
+        for c in all_cps:
+            # ЗАЩИТА: блокируем циклические связи
+            if c.parent_id and c.parent_id in cp_map and c.parent_id != c.id:
+                cp_map[c.parent_id].children.append(c)
+            else:
+                c.parent_id = None
+                roots.append(c)
+        return [c for c in roots if c.parent_id is None]
+
+    def get_counterparty_summary(self, cp_id: int):
+        return self.repo.get_counterparty_summary(cp_id)
+
     def validate_counterparty(self, cp: Counterparty):
         if not cp.name.strip():
             raise ValueError("Название контрагента обязательно")

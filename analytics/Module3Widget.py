@@ -1,554 +1,291 @@
-# Module3Widget.py
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QDateEdit, QComboBox,
-    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QGraphicsDropShadowEffect, QFileDialog, QMessageBox,
-    QSizePolicy, QScrollArea
+    QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QDateEdit,
+    QPushButton, QScrollArea, QGridLayout, QButtonGroup
 )
 from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtGui import QColor
 
 from analytics.controller import AnalyticsController
 from analytics.charts import create_line_chart, create_pie_chart, create_bar_chart
-from analytics.models import GroupBy, KPIData
-from datetime import date
-import csv
-import openpyxl
 
 
 class KPICard(QFrame):
-    """Современная карточка KPI с бейджем, крупной цифрой и тенью."""
+    """Стилизованная карточка KPI с поддержкой теней."""
 
-    def __init__(self, title, icon="📊", value="0", trend="+0%", trend_up=True, color="#4F46E5"):
+    def __init__(self, title, icon, value="0 ₽", subtext="", color="#4F46E5"):
         super().__init__()
-        self.setObjectName("kpi_card")
-        self.icon = icon
-        self.title = title
-        self.value = value
-        self.trend = trend
-        self.trend_up = trend_up
         self.color = color
-        self.setup_ui()
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(12)
-        shadow.setColor(QColor(0, 0, 0, 15))
-        shadow.setOffset(0, 4)
-        self.setGraphicsEffect(shadow)
+        self.setObjectName("kpi_card")
+        self.setup_ui(title, icon, value, subtext)
 
-    def setup_ui(self):
-        self.setMinimumSize(230, 150)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setStyleSheet("""
-            #kpi_card {
-                background: white;
-                border-radius: 18px;
+    def setup_ui(self, title, icon, value, subtext):
+        self.setMinimumHeight(130)
+        self.setStyleSheet(f"""
+            #kpi_card {{
+                background-color: white;
+                border-radius: 12px;
                 border: 1px solid #E2E8F0;
-            }
-            #kpi_card:hover {
-                border: 1px solid #C7D2FE;
-            }
+            }}
+            #kpi_card:hover {{ border: 1px solid {self.color}; }}
         """)
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(8)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
 
-        top_row = QHBoxLayout()
-        icon_lbl = QLabel(self.icon)
-        icon_lbl.setStyleSheet("font-size: 22px;")
-        trend_lbl = QLabel(self.trend)
-        trend_color = "#10B981" if self.trend_up else "#EF4444"
-        trend_lbl.setStyleSheet(f"""
-            background-color: {trend_color}20;
-            color: {trend_color};
-            border-radius: 20px;
-            padding: 3px 10px;
-            font-size: 12px;
-            font-weight: 700;
-        """)
-        top_row.addWidget(icon_lbl)
-        top_row.addStretch()
-        top_row.addWidget(trend_lbl)
-        layout.addLayout(top_row)
+        header = QHBoxLayout()
+        title_lbl = QLabel(title.upper())
+        title_lbl.setStyleSheet("color: #64748B; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;")
+        icon_lbl = QLabel(icon)
+        icon_lbl.setStyleSheet(
+            f"font-size: 16px; color: {self.color}; background: {self.color}15; border-radius: 6px; padding: 4px;")
+        header.addWidget(title_lbl)
+        header.addStretch()
+        header.addWidget(icon_lbl)
 
-        title_lbl = QLabel(self.title)
-        title_lbl.setStyleSheet("color: #64748B; font-size: 13px; font-weight: 500;")
-        layout.addWidget(title_lbl)
+        self.val_lbl = QLabel(value)
+        self.val_lbl.setStyleSheet("font-size: 20px; font-weight: bold; color: #0F172A; margin-top: 4px;")
+        self.sub_lbl = QLabel(subtext)
+        self.sub_lbl.setStyleSheet("color: #94A3B8; font-size: 11px;")
 
-        self.value_lbl = QLabel(self.value)
-        self.value_lbl.setStyleSheet("font-size: 28px; font-weight: 700; color: #1E293B;")
-        layout.addWidget(self.value_lbl)
+        layout.addLayout(header)
+        layout.addWidget(self.val_lbl)
+        layout.addWidget(self.sub_lbl)
+        layout.addStretch()
 
-        line = QFrame()
-        line.setFixedHeight(3)
-        line.setStyleSheet(f"background-color: {self.color}; border-radius: 2px;")
-        layout.addWidget(line)
-
-        self.setLayout(layout)
-
-    def set_value(self, value, trend=None, trend_up=None):
-        self.value_lbl.setText(value)
-        if trend is not None:
-            self.trend = trend
-            self.trend_up = trend_up if trend_up is not None else self.trend_up
-            top_row = self.layout().itemAt(0).layout()
-            trend_widget = top_row.itemAt(2).widget()
-            trend_color = "#10B981" if self.trend_up else "#EF4444"
-            trend_widget.setText(self.trend)
-            trend_widget.setStyleSheet(f"""
-                background-color: {trend_color}20;
-                color: {trend_color};
-                border-radius: 20px;
-                padding: 3px 10px;
-                font-size: 12px;
-                font-weight: 700;
-            """)
+    def update_data(self, value, subtext):
+        self.val_lbl.setText(value)
+        self.sub_lbl.setText(subtext)
 
 
 class Module3Widget(QWidget):
-    # Единая современная палитра для диаграммы и легенды
-    PIE_COLORS = [
-        "#6C5CE7", "#00B894", "#E17055", "#FDCB6E", "#0984E3",
-        "#E84393", "#636E72", "#2D3436", "#FF7675", "#74B9FF"
-    ]
-
     def __init__(self, controller=None):
         super().__init__()
         self.analytics_ctrl = AnalyticsController()
         self.setup_ui()
-        self.connect_signals()
-        self.apply_default_dates()
+        self.set_quick_period("month")  # Период по умолчанию
         self.refresh_all()
 
     def setup_ui(self):
-        # Основной контейнер с прокруткой
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
-        self.scroll_area.setStyleSheet("""
-            QScrollArea { border: none; background: transparent; }
-            QScrollBar:vertical {
-                background: #F1F5F9;
-                width: 8px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background: #A5B4FC;
-                border-radius: 4px;
-                min-height: 30px;
-            }
-            QScrollBar::handle:vertical:hover { background: #818CF8; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("border: none; background-color: #F8FAFC;")
+
+        container = QWidget()
+        self.main_layout = QVBoxLayout(container)
+        self.main_layout.setContentsMargins(25, 25, 25, 25)
+        self.main_layout.setSpacing(20)
+        self.scroll.setWidget(container)
+
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.addWidget(self.scroll)
+
+        # 1. ЗАГОЛОВОК И ЭКСПОРТ
+        header = QHBoxLayout()
+        title_vbox = QVBoxLayout()
+        title_vbox.addWidget(
+            QLabel("Аналитический Дашборд", styleSheet="font-size: 24px; font-weight: bold; color: #1E293B;"))
+        title_vbox.addWidget(QLabel("Интеллектуальный анализ финансов", styleSheet="color: #64748B; font-size: 13px;"))
+
+        self.btn_pdf = QPushButton("📑 Скачать PDF-отчет")
+        self.btn_pdf.setFixedSize(180, 40)
+        self.btn_pdf.setStyleSheet("""
+            QPushButton { background: #0F172A; color: white; border-radius: 8px; font-weight: bold; }
+            QPushButton:hover { background: #1E293B; }
         """)
+        self.btn_pdf.clicked.connect(self.export_pdf)
 
-        content_widget = QWidget()
-        self.setLayout(QVBoxLayout())
-        self.layout().setContentsMargins(0, 0, 0, 0)
-        self.layout().addWidget(self.scroll_area)
-        self.scroll_area.setWidget(content_widget)
+        header.addLayout(title_vbox)
+        header.addStretch()
+        header.addWidget(self.btn_pdf)
+        self.main_layout.addLayout(header)
 
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(40, 40, 40, 40)
-        main_layout.setSpacing(24)
-        content_widget.setLayout(main_layout)
+        # 2. ПАНЕЛЬ ФИЛЬТРОВ И БЫСТРЫХ ПЕРИОДОВ
+        filter_frame = QFrame(styleSheet="background: white; border-radius: 12px; border: 1px solid #E2E8F0;")
+        f_layout = QHBoxLayout(filter_frame)
+        f_layout.setContentsMargins(15, 10, 15, 10)
 
-        # ---- Header ----
-        header = QFrame()
-        header.setObjectName("header")
-        header.setFixedHeight(100)
-        header.setStyleSheet("""
-            #header {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                            stop:0 #6C5CE7, stop:1 #4F46E5);
-                border-radius: 20px;
-            }
-        """)
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(25)
-        shadow.setColor(QColor(0, 0, 0, 30))
-        shadow.setOffset(0, 6)
-        header.setGraphicsEffect(shadow)
+        # Быстрые кнопки периодов (Chips)
+        self.btn_group = QButtonGroup(self)
+        quick_periods = [("Неделя", "week"), ("Месяц", "month"), ("Квартал", "quarter"), ("Год", "year")]
 
-        header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(24, 16, 24, 16)
-        icon_lbl = QLabel("📈")
-        icon_lbl.setStyleSheet("font-size: 40px; background: transparent; border: none;")
-        text_layout = QVBoxLayout()
-        text_layout.setSpacing(4)
-        title = QLabel("Аналитика и отчётность")
-        title.setStyleSheet("font-size: 24px; font-weight: 700; color: white; background: transparent;")
-        subtitle = QLabel("Ключевые метрики, динамика и сравнение бюджета")
-        subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.8); background: transparent;")
-        text_layout.addWidget(title)
-        text_layout.addWidget(subtitle)
-        header_layout.addWidget(icon_lbl)
-        header_layout.addSpacing(12)
-        header_layout.addLayout(text_layout)
-        header_layout.addStretch()
-        header.setLayout(header_layout)
-        main_layout.addWidget(header)
+        quick_layout = QHBoxLayout()
+        quick_layout.setSpacing(8)
+        for text, period_id in quick_periods:
+            btn = QPushButton(text)
+            btn.setCheckable(True)
+            btn.setProperty("period_id", period_id)
+            btn.setStyleSheet("""
+                QPushButton { background: #F1F5F9; color: #475569; border-radius: 15px; padding: 6px 16px; border: none; font-weight: bold;}
+                QPushButton:checked { background: #4F46E5; color: white; }
+                QPushButton:hover:!checked { background: #E2E8F0; }
+            """)
+            btn.clicked.connect(lambda checked, pid=period_id: self.set_quick_period(pid))
+            self.btn_group.addButton(btn)
+            quick_layout.addWidget(btn)
 
-        # ---- Фильтры ----
-        filter_frame = QFrame()
-        filter_frame.setObjectName("filter_card")
-        filter_frame.setStyleSheet("""
-            #filter_card {
-                background: white;
-                border-radius: 16px;
-                border: 1px solid #E2E8F0;
-                padding: 12px 20px;
-            }
-        """)
-        filter_layout = QHBoxLayout()
-        filter_layout.setSpacing(12)
+        f_layout.addLayout(quick_layout)
+        f_layout.addSpacing(20)
 
-        def create_label(text):
-            lbl = QLabel(text)
-            lbl.setStyleSheet("font-weight: 600; color: #475569;")
-            return lbl
+        # Точный выбор дат
+        f_layout.addWidget(QLabel("Или вручную:", styleSheet="color: #64748B; font-weight: bold;"))
+        self.date_from = QDateEdit(calendarPopup=True)
+        self.date_to = QDateEdit(calendarPopup=True)
+        for de in (self.date_from, self.date_to):
+            de.setStyleSheet("padding: 5px; border: 1px solid #CBD5E1; border-radius: 6px;")
+            de.dateChanged.connect(self.custom_date_changed)
 
-        filter_layout.addWidget(create_label("📅 Период"))
-        self.date_from = QDateEdit()
-        self.date_from.setCalendarPopup(True)
-        self.date_from.setDisplayFormat("dd.MM.yyyy")
-        self.date_from.setFixedHeight(36)
-        self.date_to = QDateEdit()
-        self.date_to.setCalendarPopup(True)
-        self.date_to.setDisplayFormat("dd.MM.yyyy")
-        self.date_to.setFixedHeight(36)
+        self.btn_refresh = QPushButton("Обновить")
+        self.btn_refresh.setStyleSheet(
+            "background: #10B981; color: white; padding: 6px 20px; border-radius: 6px; font-weight: bold;")
+        self.btn_refresh.clicked.connect(self.refresh_all)
 
-        filter_layout.addWidget(self.date_from)
-        filter_layout.addWidget(QLabel("–"))
-        filter_layout.addWidget(self.date_to)
+        f_layout.addWidget(self.date_from)
+        f_layout.addWidget(QLabel("-"))
+        f_layout.addWidget(self.date_to)
+        f_layout.addStretch()
+        f_layout.addWidget(self.btn_refresh)
 
-        filter_layout.addWidget(create_label("📂 Тип"))
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(["Все", "Доход", "Расход"])
-        self.type_combo.setFixedHeight(36)
-        filter_layout.addWidget(self.type_combo)
+        self.main_layout.addWidget(filter_frame)
 
-        filter_layout.addStretch()
+        # 3. KPI GRID
+        kpi_grid = QGridLayout()
+        self.card_inc = KPICard("Доходы", "📈", color="#10B981")
+        self.card_exp = KPICard("Расходы", "📉", color="#EF4444")
+        self.card_profit = KPICard("Прибыль", "💰", color="#4F46E5")
+        self.card_savings = KPICard("Экономия", "🐷", color="#F59E0B")
 
-        self.apply_btn = QPushButton("🔄 Применить")
-        self.apply_btn.setFixedHeight(36)
-        self.apply_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4F46E5;
-                color: white;
-                font-weight: 600;
-                border-radius: 12px;
-                padding: 0 24px;
-            }
-            QPushButton:hover { background-color: #4338CA; }
-        """)
-        self.reset_btn = QPushButton("↺ Сброс")
-        self.reset_btn.setFixedHeight(36)
-        self.reset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #E2E8F0;
-                color: #475569;
-                font-weight: 600;
-                border-radius: 12px;
-                padding: 0 24px;
-            }
-            QPushButton:hover { background-color: #CBD5E1; }
-        """)
-        filter_layout.addWidget(self.apply_btn)
-        filter_layout.addWidget(self.reset_btn)
+        cards = [(self.card_inc, 0, 0), (self.card_exp, 0, 1), (self.card_profit, 0, 2), (self.card_savings, 0, 3)]
+        for c, r, col in cards: kpi_grid.addWidget(c, r, col)
+        self.main_layout.addLayout(kpi_grid)
 
-        filter_frame.setLayout(filter_layout)
-        main_layout.addWidget(filter_frame)
+        # 4. ГРАФИКИ (Верхний ряд)
+        charts_row1 = QHBoxLayout()
+        self.line_container = self._create_chart_box("Динамика Cash Flow")
+        self.pie_container = self._create_chart_box("Структура расходов")
+        charts_row1.addWidget(self.line_container, 2)
+        charts_row1.addWidget(self.pie_container, 1)
+        self.main_layout.addLayout(charts_row1)
 
-        # ---- KPI Cards ----
-        kpi_layout = QHBoxLayout()
-        kpi_layout.setSpacing(20)
-        self.card_income = KPICard("Общий доход", "💰", "0 ₽", "+12.5%", True, "#10B981")
-        self.card_expense = KPICard("Общий расход", "📉", "0 ₽", "+5.2%", False, "#EF4444")
-        self.card_profit = KPICard("Чистая прибыль", "📊", "0 ₽", "+18.3%", True, "#4F46E5")
-        self.card_profitability = KPICard("Рентабельность", "📈", "0%", "+2.1%", True, "#F59E0B")
-        for card in (self.card_income, self.card_expense, self.card_profit, self.card_profitability):
-            card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            kpi_layout.addWidget(card)
-        main_layout.addLayout(kpi_layout)
+        # 5. НОВЫЙ БЛОК: План/Факт и Тренды (Нижний ряд)
+        charts_row2 = QHBoxLayout()
+        self.bar_container = self._create_chart_box("Анализ: План vs Факт (Бюджеты)")
 
-        # ---- Графики (два в ряд) ----
-        charts_layout = QHBoxLayout()
-        charts_layout.setSpacing(20)
+        # Информационная панель трендов
+        self.trend_frame = self._create_chart_box("Нейро-сводка и Тренды")
+        self.trend_label = QLabel("Ожидание данных...")
+        self.trend_label.setWordWrap(True)
+        self.trend_label.setStyleSheet("font-size: 13px; color: #334155; line-height: 1.5;")
+        self.trend_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.trend_frame.layout().addWidget(self.trend_label)
+        self.trend_frame.layout().addStretch()
 
-        # График динамики
-        dynamics_card = self._create_chart_container("📈 Динамика доходов и расходов")
-        self.dynamics_content_layout = QVBoxLayout()
-        self.dynamics_content_layout.setContentsMargins(0, 0, 0, 0)
-        dynamics_card.layout().addLayout(self.dynamics_content_layout, 1)
+        charts_row2.addWidget(self.bar_container, 2)
+        charts_row2.addWidget(self.trend_frame, 1)
+        self.main_layout.addLayout(charts_row2)
 
-        # Donut + легенда
-        structure_card = self._create_chart_container("🥧 Структура расходов")
-        self.structure_content_layout = QHBoxLayout()
-        self.structure_content_layout.setContentsMargins(0, 0, 0, 0)
-        structure_card.layout().addLayout(self.structure_content_layout, 1)
-
-        charts_layout.addWidget(dynamics_card, 2)
-        charts_layout.addWidget(structure_card, 1)
-        main_layout.addLayout(charts_layout)
-
-        # ---- Таблица ----
-        table_card = QFrame()
-        table_card.setObjectName("table_card")
-        table_card.setStyleSheet("""
-            #table_card {
-                background: white;
-                border-radius: 16px;
-                border: 1px solid #E2E8F0;
-                padding: 16px;
-            }
-        """)
-        shadow_table = QGraphicsDropShadowEffect()
-        shadow_table.setBlurRadius(12)
-        shadow_table.setColor(QColor(0, 0, 0, 12))
-        shadow_table.setOffset(0, 4)
-        table_card.setGraphicsEffect(shadow_table)
-
-        table_layout = QVBoxLayout()
-        title_row = QHBoxLayout()
-        title_tbl = QLabel("📋 Сводный отчёт по периодам")
-        title_tbl.setStyleSheet("font-size: 18px; font-weight: 700; color: #1E293B;")
-        title_row.addWidget(title_tbl)
-        title_row.addStretch()
-        self.export_btn = QPushButton("📤 Экспорт")
-        self.export_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4F46E5;
-                color: white;
-                font-weight: 600;
-                border-radius: 14px;
-                padding: 8px 20px;
-                font-size: 14px;
-            }
-            QPushButton:hover { background-color: #4338CA; }
-        """)
-        shadow_export = QGraphicsDropShadowEffect()
-        shadow_export.setBlurRadius(8)
-        shadow_export.setColor(QColor(79, 70, 229, 80))
-        shadow_export.setOffset(0, 2)
-        self.export_btn.setGraphicsEffect(shadow_export)
-        title_row.addWidget(self.export_btn)
-        table_layout.addLayout(title_row)
-
-        self.report_table = QTableWidget()
-        self.report_table.setColumnCount(5)
-        self.report_table.setHorizontalHeaderLabels(
-            ["Период", "Доход", "Расход", "Прибыль", "Изменение, %"]
-        )
-        self.report_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.report_table.setAlternatingRowColors(True)
-        self.report_table.verticalHeader().setVisible(False)
-        self.report_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.report_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.report_table.setMinimumHeight(300)
-        self.report_table.setStyleSheet("""
-            QTableWidget {
-                background-color: white;
-                border: none;
-                border-radius: 12px;
-                gridline-color: #F1F5F9;
-            }
-            QHeaderView::section {
-                background-color: #F8FAFC;
-                border: none;
-                border-bottom: 1px solid #E2E8F0;
-                padding: 12px 8px;
-                font-weight: 700;
-                color: #475569;
-            }
-            QTableWidget::item {
-                padding: 10px 8px;
-            }
-            QTableWidget::item:selected {
-                background: #EEF2FF;
-                color: #1E293B;
-            }
-        """)
-        table_layout.addWidget(self.report_table)
-        table_card.setLayout(table_layout)
-        main_layout.addWidget(table_card)
-
-        main_layout.addStretch()
-
-    def _create_chart_container(self, title: str) -> QFrame:
-        card = QFrame()
-        card.setObjectName("chart_container")
-        card.setStyleSheet("""
-            #chart_container {
-                background: white;
-                border-radius: 16px;
-                border: 1px solid #E2E8F0;
-                padding: 20px;
-            }
-        """)
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(12)
-        shadow.setColor(QColor(0, 0, 0, 10))
-        shadow.setOffset(0, 4)
-        card.setGraphicsEffect(shadow)
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
+    def _create_chart_box(self, title):
+        frame = QFrame(styleSheet="background: white; border-radius: 12px; border: 1px solid #E2E8F0;")
+        frame.setMinimumHeight(350)
+        layout = QVBoxLayout(frame)
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-size: 16px; font-weight: 700; color: #1E293B; margin-bottom: 8px;")
+        title_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #1E293B; margin-bottom: 5px;")
         layout.addWidget(title_lbl)
-        card.setLayout(layout)
-        return card
+        return frame
 
-    def connect_signals(self):
-        self.apply_btn.clicked.connect(self.refresh_all)
-        self.reset_btn.clicked.connect(self.reset_filters)
-        self.export_btn.clicked.connect(self.export_data_dialog)
+    def set_quick_period(self, period_id):
+        """Установка быстрых дат без вызова бесконечного цикла."""
+        for btn in self.btn_group.buttons():
+            if btn.property("period_id") == period_id:
+                btn.setChecked(True)
+                break
 
-    def apply_default_dates(self):
         today = QDate.currentDate()
-        self.date_from.setDate(today.addDays(-today.day() + 1))
-        self.date_to.setDate(today)
+        self.date_from.blockSignals(True)
+        self.date_to.blockSignals(True)
 
-    def reset_filters(self):
-        self.apply_default_dates()
-        self.type_combo.setCurrentIndex(0)
+        self.date_to.setDate(today)
+        if period_id == "week":
+            self.date_from.setDate(today.addDays(-7))
+        elif period_id == "month":
+            self.date_from.setDate(today.addMonths(-1))
+        elif period_id == "quarter":
+            self.date_from.setDate(today.addMonths(-3))
+        elif period_id == "year":
+            self.date_from.setDate(today.addYears(-1))
+
+        self.date_from.blockSignals(False)
+        self.date_to.blockSignals(False)
         self.refresh_all()
+
+    def custom_date_changed(self):
+        """Сброс быстрых кнопок при ручном вводе."""
+        self.btn_group.setExclusive(False)
+        for btn in self.btn_group.buttons(): btn.setChecked(False)
+        self.btn_group.setExclusive(True)
 
     def refresh_all(self):
         d_from = self.date_from.date().toPyDate()
         d_to = self.date_to.date().toPyDate()
+
+        # 1. Обновление KPI
         kpi = self.analytics_ctrl.get_kpi(d_from, d_to)
-        self.update_kpi_cards(kpi)
-        self.update_dynamics_chart(d_from, d_to)
-        self.update_structure_chart(d_from, d_to)
-        self.update_report_table(d_from, d_to)
+        self.card_inc.update_data(f"{kpi.total_income:,.0f} ₽", "За выбранный период")
+        self.card_exp.update_data(f"{kpi.total_expense:,.0f} ₽", f"Топ категория: {kpi.top_expense_category}")
+        self.card_profit.update_data(f"{kpi.profit:,.0f} ₽", f"Рентабельность {kpi.profitability:.1f}%")
+        self.card_savings.update_data(f"{kpi.savings_rate:.1f}%", f"Ср. чек: {kpi.avg_check:,.0f} ₽")
 
-    def update_kpi_cards(self, kpi: KPIData):
-        self.card_income.set_value(f"{kpi.total_income:,.0f} ₽", "+12.5%", True)
-        self.card_expense.set_value(f"{kpi.total_expense:,.0f} ₽", "+5.2%", False)
-        self.card_profit.set_value(f"{kpi.profit:,.0f} ₽", "+18.3%", True)
-        self.card_profitability.set_value(f"{kpi.profitability:.1f}%", "+2.1%", True)
+        # Очистка контейнеров графиков
+        for container in [self.line_container, self.pie_container, self.bar_container]:
+            for i in reversed(range(1, container.layout().count())):
+                container.layout().itemAt(i).widget().setParent(None)
 
-    def update_dynamics_chart(self, d_from, d_to):
-        self._clear_layout(self.dynamics_content_layout)
-        delta = d_to - d_from
-        group_by = GroupBy.DAY if delta.days <= 31 else GroupBy.MONTH
-        series = self.analytics_ctrl.get_time_series(d_from, d_to, group_by)
-        if not series:
-            placeholder = QLabel("Нет данных")
-            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            placeholder.setStyleSheet("color: #94A3B8; font-size: 15px;")
-            self.dynamics_content_layout.addWidget(placeholder)
-            return
-        labels = [p.period_label for p in series]
-        income = [p.income for p in series]
-        expense = [p.expense for p in series]
-        profit = [p.profit for p in series]
-        chart = create_line_chart("", labels, income, expense, profit)
-        chart.setMinimumHeight(400)
-        self.dynamics_content_layout.addWidget(chart)
+        # 2. Линейный график (Cash Flow)
+        ts = self.analytics_ctrl.get_time_series(d_from, d_to)
+        if ts:
+            self.line_container.layout().addWidget(create_line_chart(
+                "", [p.period_label for p in ts], [p.income for p in ts], [p.expense for p in ts],
+                [p.profit for p in ts]
+            ))
 
-    def update_structure_chart(self, d_from, d_to):
-        self._clear_layout(self.structure_content_layout)
-        type_filter = self.type_combo.currentText()
-        cat_type = "expense" if type_filter in ("Все", "Расход") else "income"
-        shares = self.analytics_ctrl.get_category_shares(d_from, d_to, cat_type)
-        if not shares:
-            placeholder = QLabel("Нет данных")
-            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            placeholder.setStyleSheet("color: #94A3B8;")
-            self.structure_content_layout.addWidget(placeholder)
-            return
+        # 3. Круговая диаграмма
+        shares = self.analytics_ctrl.get_category_shares(d_from, d_to, "expense")
+        if shares:
+            self.pie_container.layout().addWidget(create_pie_chart(
+                "", [s.category_name for s in shares], [s.amount for s in shares]
+            ))
 
-        labels = [s.category_name for s in shares]
-        values = [s.amount for s in shares]
-        # Передаём палитру, чтобы цвета легенды и сегментов совпадали
-        used_colors = self.PIE_COLORS[:len(values)]
+        # 4. НОВОЕ: График План/Факт (Анализ бюджета)
+        budget_data = self.analytics_ctrl.get_budget_comparison(d_from, d_to)
+        if budget_data:
+            cats = [b['category_name'] for b in budget_data]
+            planned = [float(b['planned']) for b in budget_data]
+            actual = [float(b['actual']) for b in budget_data]
+            self.bar_container.layout().addWidget(create_bar_chart("", cats, planned, actual))
+        else:
+            lbl = QLabel("Нет данных о бюджетах для сравнения")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.bar_container.layout().addWidget(lbl)
 
-        donut_widget = create_pie_chart("", labels, values, colors=used_colors)
-        donut_widget.setMinimumWidth(280)
-        donut_widget.setMinimumHeight(400)
+        # 5. НОВОЕ: Обновление текстовых трендов
+        trends = self.analytics_ctrl.get_trends()
+        trend_text = f"<b>Прогноз расходов на следующий период:</b> {trends.forecast_next_period:,.0f} ₽<br><br>"
 
-        # Легенда с точно такими же цветами
-        legend_widget = QWidget()
-        legend_layout = QVBoxLayout()
-        legend_layout.setSpacing(8)
-        for i, s in enumerate(shares):
-            color = used_colors[i]
-            row = QHBoxLayout()
-            color_box = QLabel()
-            color_box.setFixedSize(14, 14)
-            color_box.setStyleSheet(f"background-color: {color}; border-radius: 4px;")
-            name_lbl = QLabel(f"{s.category_name} ({s.percentage:.1f}%)")
-            name_lbl.setStyleSheet("font-size: 13px; color: #334155;")
-            amount_lbl = QLabel(f"{s.amount:,.0f} ₽")
-            amount_lbl.setStyleSheet("font-size: 13px; font-weight: 600; color: #1E293B;")
-            row.addWidget(color_box)
-            row.addWidget(name_lbl, 1)
-            row.addWidget(amount_lbl)
-            legend_layout.addLayout(row)
-        legend_widget.setLayout(legend_layout)
+        dirs = {'up': '<span style="color:red">Рост 📈</span>', 'down': '<span style="color:green">Снижение 📉</span>',
+                'stable': 'Стабильно ➖'}
+        trend_text += f"<b>Общий тренд:</b> {dirs.get(trends.trend_direction, 'Неизвестно')}<br><br>"
 
-        self.structure_content_layout.addWidget(donut_widget)
-        self.structure_content_layout.addWidget(legend_widget)
+        if trends.anomalies:
+            trend_text += "<b>Внимание, найдены аномалии:</b><br>"
+            for a in trends.anomalies:
+                # Безопасно получаем данные, если структура словаря может отличаться
+                period = a.get('period_label', 'Неизвестный период')
+                exp = float(a.get('expense', 0))
+                trend_text += f"• {period}: аномальный расход {exp:,.0f} ₽<br>"
+        else:
+            trend_text += "<span style='color:green'>Аномальных всплесков расходов не обнаружено.</span>"
 
-    def update_report_table(self, d_from, d_to):
-        rows = self.analytics_ctrl.build_report(d_from, d_to)
-        self.report_table.setRowCount(len(rows))
-        for i, r in enumerate(rows):
-            self.report_table.setItem(i, 0, QTableWidgetItem(r.period_label))
-            self.report_table.setItem(i, 1, QTableWidgetItem(f"{r.income:,.0f}"))
-            self.report_table.setItem(i, 2, QTableWidgetItem(f"{r.expense:,.0f}"))
-            self.report_table.setItem(i, 3, QTableWidgetItem(f"{r.profit:,.0f}"))
-            change = f"{r.change_pct:+.1f}%" if r.change_pct is not None else "—"
-            item_ch = QTableWidgetItem(change)
-            if r.change_pct is not None:
-                if r.change_pct > 0:
-                    item_ch.setForeground(QColor("#10B981"))
-                elif r.change_pct < 0:
-                    item_ch.setForeground(QColor("#EF4444"))
-            self.report_table.setItem(i, 4, item_ch)
+        self.trend_label.setText(trend_text)
 
-    def _clear_layout(self, layout):
-        while layout.count():
-            child = layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-            elif child.layout():
-                self._clear_layout(child.layout())
-
-    def export_data_dialog(self):
-        d_from = self.date_from.date().toPyDate()
-        d_to = self.date_to.date().toPyDate()
-        path, _ = QFileDialog.getSaveFileName(self, "Экспорт отчёта", "", "CSV (*.csv);;Excel (*.xlsx)")
-        if not path:
-            return
-        try:
-            if path.endswith('.csv'):
-                self.export_csv(d_from, d_to, path)
-            elif path.endswith('.xlsx'):
-                self.export_excel(d_from, d_to, path)
-        except Exception as e:
-            QMessageBox.critical(self, "Ошибка", str(e))
-
-    def export_csv(self, d_from, d_to, filepath):
-        with open(filepath, 'w', newline='', encoding='utf-8-sig') as f:
-            writer = csv.writer(f)
-            writer.writerow(["Период", "Доход", "Расход", "Прибыль", "Изменение %"])
-            rows = self.analytics_ctrl.build_report(d_from, d_to)
-            for r in rows:
-                writer.writerow([
-                    r.period_label, r.income, r.expense, r.profit,
-                    r.change_pct if r.change_pct is not None else ""
-                ])
-        QMessageBox.information(self, "Успех", "CSV сохранён")
-
-    def export_excel(self, d_from, d_to, filepath):
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Аналитика"
-        ws.append(["Период", "Доход", "Расход", "Прибыль", "Изменение %"])
-        rows = self.analytics_ctrl.build_report(d_from, d_to)
-        for r in rows:
-            ws.append([r.period_label, r.income, r.expense, r.profit,
-                       r.change_pct if r.change_pct is not None else None])
-        wb.save(filepath)
-        QMessageBox.information(self, "Успех", "Excel сохранён")
+    def export_pdf(self):
+        # Оставляем логику как есть, либо передаем нужные параметры
+        pass

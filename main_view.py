@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty
 from PyQt6.QtGui import QColor, QFont
-
+from SettingsWidget import SettingsWidget # Путь зависит от того, куда вы положили файл
 from references.Module1Widget import Module1Widget
 from transactions.Module4Widget import Module4Widget
 from budget.Module2Widget import Module2Widget
@@ -162,6 +162,7 @@ class View(QWidget):
             ("💰", "Управление бюджетом", "Планирование"),
             ("📈", "Аналитика и отчётность", "KPI / графики"),
             ("📚", "Справочники", "Категории, подрядчики"),
+            ("⚙️", "Настройки", "Система и данные"),  # <--- Добавить эту строку
         ]
         for icon, title, subtitle in modules_data:
             btn = ModuleButton(icon, title, subtitle)
@@ -205,11 +206,13 @@ class View(QWidget):
         self.module2 = Module2Widget(controller)
         self.module3 = Module3Widget(controller)
         self.module4 = Module4Widget(controller)
+        self.settings_module = SettingsWidget(controller)
 
         self.stacked_widget.addWidget(self.module1)
         self.stacked_widget.addWidget(self.module2)
         self.stacked_widget.addWidget(self.module3)
         self.stacked_widget.addWidget(self.module4)
+        self.stacked_widget.addWidget(self.settings_module)
 
         # Синхронизация выбора модуля с кнопками
         self.btn_group.buttonClicked.connect(self.on_module_selected)

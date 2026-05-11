@@ -53,44 +53,69 @@ def create_line_chart(title: str, labels: List[str],
 
 def create_pie_chart(title: str, labels: List[str], values: List[float],
                      colors: Optional[List[str]] = None) -> QWidget:
-    """Donut chart с возможностью задать собственную палитру."""
+    """Donut chart с легендой снизу для узких контейнеров."""
     widget = QWidget()
     layout = QVBoxLayout()
-    canvas = MplCanvas(widget, width=6, height=5, dpi=100)
+
+    # Высота немного увеличена, чтобы вместить список под графиком
+    canvas = MplCanvas(widget, width=5, height=6, dpi=100)
     ax = canvas.fig.add_subplot(111)
 
-    # Если палитра не передана, используем современный набор по умолчанию
     if colors is None:
         colors = ['#6C5CE7', '#00B894', '#E17055', '#FDCB6E', '#0984E3',
                   '#E84393', '#636E72', '#2D3436', '#FF7675', '#74B9FF']
 
     used_colors = colors[:len(values)]
 
+    explode = [0.0] * len(values)
+    if values:
+        max_idx = values.index(max(values))
+        explode[max_idx] = 0.05  # Эффект выдвижения для самой большой траты
+
     wedges, texts, autotexts = ax.pie(
         values, labels=None, autopct='%1.1f%%',
-        startangle=140, pctdistance=0.78,
-        colors=used_colors,
+        startangle=140, pctdistance=0.82,
+        colors=used_colors, explode=explode,
         wedgeprops={'width': 0.4, 'edgecolor': 'white', 'linewidth': 1.5},
-        textprops={'fontsize': 10, 'fontweight': 'bold'}
+        textprops={'fontsize': 9, 'fontweight': 'bold'}
     )
-    # Стиль процентов
+
     for at in autotexts:
-        at.set_fontsize(10)
-        at.set_fontweight('bold')
         at.set_color('white')
 
-    # Центральная подпись (общая сумма)
     total = sum(values)
-    ax.text(0, 0, f'{total:,.0f} ₽', ha='center', va='center',
-            fontsize=16, fontweight='bold', color='#1E293B')
+    if total > 0:
+        ax.text(0, 0, f'{total:,.0f} ₽', ha='center', va='center',
+                fontsize=15, fontweight='bold', color='#1E293B')
 
-    ax.set_title(title, fontsize=14, fontweight='bold', color='#1E293B', pad=12)
+    if title:
+        ax.set_title(title, fontsize=14, fontweight='bold', color='#1E293B', pad=12)
+
+    if labels and values:
+        legend_labels = [f"{label}  —  {val:,.0f} ₽" for label, val in zip(labels, values)]
+
+        # Размещаем легенду СНИЗУ по центру
+        legend = ax.legend(
+            wedges, legend_labels,
+            title="Категории",
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.05),  # Сдвиг вниз за пределы круга
+            ncol=1,  # В одну колонку
+            frameon=True,
+            fancybox=True,
+            framealpha=0.9,
+            edgecolor='#E2E8F0',
+            fontsize=10
+        )
+        legend.get_title().set_fontweight('bold')
+        legend.get_title().set_color('#64748B')
+
+    # tight_layout автоматически пересчитает границы так, чтобы легенда влезла без обрезки
     canvas.fig.tight_layout()
 
     layout.addWidget(canvas)
     widget.setLayout(layout)
     return widget
-
 
 def create_bar_chart(title: str, categories: List[str],
                      planned: List[float], actual: List[float]) -> QWidget:

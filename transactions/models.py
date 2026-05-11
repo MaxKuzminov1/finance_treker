@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass, field
 from typing import Optional, List
 from enum import Enum
@@ -22,6 +21,7 @@ class Category:
     name: str = ""
     type: CategoryType = CategoryType.EXPENSE
     parent_id: Optional[int] = None
+    monthly_limit: float = 0.0  # НОВОЕ ПОЛЕ: Лимит
     children: List['Category'] = field(default_factory=list)
 
 @dataclass
@@ -33,6 +33,8 @@ class Counterparty:
     address: str = ""
     requisites: str = ""
     comment: str = ""
+    parent_id: Optional[int] = None  # НОВОЕ ПОЛЕ: Иерархия
+    children: List['Counterparty'] = field(default_factory=list)
 
 @dataclass
 class User:
@@ -41,7 +43,7 @@ class User:
     password_hash: str = ""
     role_id: int = 0
     status: UserStatus = UserStatus.ACTIVE
-    role_name: str = ""  # для отображения
+    role_name: str = ""
 
 @dataclass
 class Role:

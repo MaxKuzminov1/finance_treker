@@ -120,3 +120,22 @@ class ReferencesController:
                     comment=row.get('comment', '')
                 )
                 self.repo.create_counterparty(cp)
+
+    # Пробросьте новые методы из сервиса:
+    def merge_categories(self, source_id, target_id):
+        self.service.merge_categories(source_id, target_id)
+
+    def get_counterparties_tree(self):
+        return self.service.get_counterparty_tree()
+
+    def get_counterparty_summary(self, cp_id):
+        return self.service.get_counterparty_summary(cp_id)
+
+    # Обновите сигнатуры add/update
+    def add_category(self, name, cat_type, parent_id=None, monthly_limit=0.0):
+        cat = Category(name=name, type=cat_type, parent_id=parent_id, monthly_limit=monthly_limit)
+        return self.service.create_category(cat)
+
+    def update_category(self, cat_id, name, cat_type, parent_id=None, monthly_limit=0.0):
+        cat = Category(id=cat_id, name=name, type=cat_type, parent_id=parent_id, monthly_limit=monthly_limit)
+        self.service.update_category(cat)
