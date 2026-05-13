@@ -1,12 +1,8 @@
 # main_view.py
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QGraphicsDropShadowEffect, QStackedWidget, QScrollArea,
-    QPushButton, QButtonGroup
-)
-from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import *
 from PyQt6.QtGui import QColor, QFont
-from SettingsWidget import SettingsWidget # Путь зависит от того, куда вы положили файл
+from SettingsWidget import SettingsWidget
 from references.Module1Widget import Module1Widget
 from transactions.Module4Widget import Module4Widget
 from budget.Module2Widget import Module2Widget
@@ -21,7 +17,7 @@ class ModuleButton(QPushButton):
         self.icon = icon
         self.title = title
         self.subtitle = subtitle
-        self._shadow_radius = 8       # начальный радиус тени
+        self._shadow_radius = 8  # начальный радиус тени
         self._shadow_color = QColor(0, 0, 0, 20)  # полупрозрачная чёрная тень
         self._shadow_effect = QGraphicsDropShadowEffect()
         self._shadow_effect.setBlurRadius(self._shadow_radius)
@@ -62,8 +58,6 @@ class ModuleButton(QPushButton):
                 background: {bg};
             }}
         """)
-        # Подзаголовок будем рисовать через label внутри layout,
-        # а текст задаём через QPushButton text – упрощённо, оставим только иконку и название.
         self.setText(f"  {self.icon}  {self.title}")
 
     def enterEvent(self, event):
@@ -83,7 +77,6 @@ class ModuleButton(QPushButton):
         self.anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self.anim.start()
 
-    # Для корректного выделения (взаимоисключающего) используем QButtonGroup
     def setChecked(self, checked: bool):
         super().setChecked(checked)
         self.update_style()
@@ -162,7 +155,7 @@ class View(QWidget):
             ("💰", "Управление бюджетом", "Планирование"),
             ("📈", "Аналитика и отчётность", "KPI / графики"),
             ("📚", "Справочники", "Категории, подрядчики"),
-            ("⚙️", "Настройки", "Система и данные"),  # <--- Добавить эту строку
+            ("⚙️", "Настройки", "Система и данные"),
         ]
         for icon, title, subtitle in modules_data:
             btn = ModuleButton(icon, title, subtitle)
@@ -202,11 +195,11 @@ class View(QWidget):
         # ========================= STACKED WIDGET =========================
         self.stacked_widget = QStackedWidget()
 
-        self.module1 = Module1Widget(controller)
-        self.module2 = Module2Widget(controller)
-        self.module3 = Module3Widget(controller)
-        self.module4 = Module4Widget(controller)
-        self.settings_module = SettingsWidget(controller)
+        self.module1 = Module1Widget(controller)  # Учет операций (индекс 0)
+        self.module2 = Module2Widget(controller)  # Управление бюджетом (индекс 1)
+        self.module3 = Module3Widget(controller)  # Аналитика (индекс 2)
+        self.module4 = Module4Widget(controller)  # Справочники (индекс 3)
+        self.settings_module = SettingsWidget(controller)  # Настройки (индекс 4)
 
         self.stacked_widget.addWidget(self.module1)
         self.stacked_widget.addWidget(self.module2)
@@ -216,6 +209,9 @@ class View(QWidget):
 
         # Синхронизация выбора модуля с кнопками
         self.btn_group.buttonClicked.connect(self.on_module_selected)
+
+        # === НОВАЯ СТРОКА: Подключаем Drill-down сигнал из Модуля 3 ===
+        self.module3.drill_down_requested.connect(self.navigate_to_operations_and_filter)
 
         # По умолчанию – первый модуль
         self.module_buttons[0].setChecked(True)
@@ -229,6 +225,32 @@ class View(QWidget):
     def on_module_selected(self, btn):
         idx = self.module_buttons.index(btn)
         self.stacked_widget.setCurrentIndex(idx)
+
+    # === НОВЫЙ МЕТОД ДЛЯ ОБРАБОТКИ КЛИКА ПО КРУГОВОЙ ДИАГРАММЕ ===
+    def navigate_to_operations_and_filter(self, category_name: str):
+        """
+        Метод ловит сигнал из аналитики, откладывает переключение вкладки на 50 мс
+        (чтобы Matplotlib успел завершить клик без падения), и переключает окно.
+        """
+        # 1. Визуально выделяем кнопку "Учёт операций" в боковом меню
+        self.module_buttons[0].setChecked(True)
+
+        # 2. Оборачиваем логику в функцию, чтобы вызвать ее с задержкой
+        def switch_and_filter():
+            try:
+                # Физически переключаем экраны на Модуль 1
+                self.stacked_widget.setCurrentIndex(0)
+
+                # Вызываем метод фильтрации внутри Module1Widget
+                if hasattr(self.module1, 'filter_by_category'):
+                    self.module1.filter_by_category(category_name)
+                else:
+                    print(f"[DRILL-DOWN] Внимание: В классе Module1Widget не найден метод filter_by_category.")
+            except Exception as e:
+                print(f"Ошибка при переключении Drill-down: {e}")
+
+        # 3. Делаем отложенный вызов через 50 миллисекунд (магия против крашей)
+        QTimer.singleShot(50, switch_and_filter)
 
     def apply_styles(self):
         self.setStyleSheet("""

@@ -1,8 +1,8 @@
 import MySQLdb
 from MySQLdb.cursors import DictCursor
 from references.config import DB_CONFIG
-from typing import List, Optional, Dict, Any
-from datetime import date, datetime, timedelta
+from typing import List, Dict, Any
+from datetime import date, timedelta
 from analytics.models import GroupBy
 
 
@@ -27,8 +27,8 @@ class AnalyticsRepository:
             SELECT 
                 COUNT(*) as tx_count,
                 AVG(total_amount) as avg_check,
-                SUM(CASE WHEN type = 'income' THEN total_amount ELSE 0 END) as total_income,
-                SUM(CASE WHEN type = 'expense' THEN total_amount ELSE 0 END) as total_expense
+                SUM(CASE WHEN type IN ('income', 'доход') THEN total_amount ELSE 0 END) as total_income,
+                SUM(CASE WHEN type IN ('expense', 'расход') THEN total_amount ELSE 0 END) as total_expense
             FROM transactions
             WHERE date BETWEEN %s AND %s
         """
@@ -41,16 +41,15 @@ class AnalyticsRepository:
             FROM transaction_items ti
             JOIN categories c ON ti.category_id = c.id
             JOIN transactions t ON ti.transaction_id = t.id
-            WHERE t.date BETWEEN %s AND %s AND t.type = %s
+            WHERE t.date BETWEEN %s AND %s 
+              AND (t.type = %s OR (t.type = 'расход' AND %s = 'expense') OR (t.type = 'доход' AND %s = 'income'))
             GROUP BY c.id
             ORDER BY total DESC LIMIT 1
         """
-        rows = self._execute(sql, (date_from, date_to, tx_type))
+        rows = self._execute(sql, (date_from, date_to, tx_type, tx_type, tx_type))
         return rows[0]['name'] if rows else "Нет данных"
 
     def get_time_series(self, date_from: date, date_to: date, group_by: GroupBy = GroupBy.MONTH) -> List[Dict]:
-        # ВНИМАНИЕ: Используем двойной процент %%, чтобы Python не пытался
-        # интерпретировать его как форматную строку.
         group_formats = {
             GroupBy.DAY: "%%Y-%%m-%%d",
             GroupBy.WEEK: "%%Y-%%u",
@@ -63,8 +62,8 @@ class AnalyticsRepository:
             SELECT 
                 DATE_FORMAT(date, '{fmt}') as period_label,
                 MIN(date) as begin_date,
-                SUM(CASE WHEN type = 'income' THEN total_amount ELSE 0 END) as income,
-                SUM(CASE WHEN type = 'expense' THEN total_amount ELSE 0 END) as expense
+                SUM(CASE WHEN type IN ('income', 'доход') THEN total_amount ELSE 0 END) as income,
+                SUM(CASE WHEN type IN ('expense', 'расход') THEN total_amount ELSE 0 END) as expense
             FROM transactions
             WHERE date BETWEEN %s AND %s
             GROUP BY period_label
@@ -79,16 +78,28 @@ class AnalyticsRepository:
 
     def get_category_breakdown(self, date_from: date, date_to: date, type_filter: str) -> List[Dict]:
         sql = """
-            SELECT c.name as category_name, SUM(ti.amount) as amount
+            SELECT 
+                COALESCE(parent.name, c.name) as category_name, 
+                SUM(ti.amount) as amount
             FROM transaction_items ti
             JOIN categories c ON ti.category_id = c.id
+            LEFT JOIN categories parent ON c.parent_id = parent.id
             JOIN transactions t ON ti.transaction_id = t.id
-            WHERE t.date BETWEEN %s AND %s AND t.type = %s
-            GROUP BY c.id
+            WHERE t.date BETWEEN %s AND %s 
+              AND (t.type = %s OR (t.type = 'расход' AND %s = 'expense') OR (t.type = 'доход' AND %s = 'income'))
+            GROUP BY category_name
             ORDER BY amount DESC
         """
-        return self._execute(sql, (date_from, date_to, type_filter))
+        # --- ДОБАВЬ ЭТИ ТРИ СТРОКИ ДЛЯ ОТЛАДКИ ---
+        print(f"--- DEBUG: Запрос структуры расходов ---")
+        print(f"Период: {date_from} -> {date_to} | Фильтр: {type_filter}")
 
+        result = self._execute(sql, (date_from, date_to, type_filter, type_filter, type_filter))
+
+        print(f"Результат из БД: {result}")
+        # ----------------------------------------
+
+        return result
     def get_budget_comparison(self, date_from: date, date_to: date) -> List[Dict]:
         sql = """
             SELECT

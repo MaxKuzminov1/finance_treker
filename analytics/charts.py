@@ -50,14 +50,12 @@ def create_line_chart(title: str, labels: List[str],
     widget.setLayout(layout)
     return widget
 
-
 def create_pie_chart(title: str, labels: List[str], values: List[float],
-                     colors: Optional[List[str]] = None) -> QWidget:
-    """Donut chart с легендой снизу для узких контейнеров."""
+                     colors: Optional[List[str]] = None,
+                     on_click_callback=None) -> QWidget:
+    """Donut chart с легендой снизу и поддержкой Drill-down кликов."""
     widget = QWidget()
     layout = QVBoxLayout()
-
-    # Высота немного увеличена, чтобы вместить список под графиком
     canvas = MplCanvas(widget, width=5, height=6, dpi=100)
     ax = canvas.fig.add_subplot(111)
 
@@ -66,19 +64,22 @@ def create_pie_chart(title: str, labels: List[str], values: List[float],
                   '#E84393', '#636E72', '#2D3436', '#FF7675', '#74B9FF']
 
     used_colors = colors[:len(values)]
-
     explode = [0.0] * len(values)
     if values:
-        max_idx = values.index(max(values))
-        explode[max_idx] = 0.05  # Эффект выдвижения для самой большой траты
+        explode[values.index(max(values))] = 0.05
 
+    # picker=True делает график интерактивным
     wedges, texts, autotexts = ax.pie(
         values, labels=None, autopct='%1.1f%%',
         startangle=140, pctdistance=0.82,
         colors=used_colors, explode=explode,
-        wedgeprops={'width': 0.4, 'edgecolor': 'white', 'linewidth': 1.5},
+        wedgeprops={'width': 0.4, 'edgecolor': 'white', 'linewidth': 1.5, 'picker': True},
         textprops={'fontsize': 9, 'fontweight': 'bold'}
     )
+
+    # Привязываем имя категории к каждому сектору
+    for i, w in enumerate(wedges):
+        w.set_gid(labels[i])
 
     for at in autotexts:
         at.set_color('white')
@@ -93,26 +94,27 @@ def create_pie_chart(title: str, labels: List[str], values: List[float],
 
     if labels and values:
         legend_labels = [f"{label}  —  {val:,.0f} ₽" for label, val in zip(labels, values)]
-
-        # Размещаем легенду СНИЗУ по центру
         legend = ax.legend(
-            wedges, legend_labels,
-            title="Категории",
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.05),  # Сдвиг вниз за пределы круга
-            ncol=1,  # В одну колонку
-            frameon=True,
-            fancybox=True,
-            framealpha=0.9,
-            edgecolor='#E2E8F0',
-            fontsize=10
+            wedges, legend_labels, title="Категории (Кликните для фильтра)", loc="upper center",
+            bbox_to_anchor=(0.5, -0.05), ncol=1, frameon=True, fancybox=True, framealpha=0.9,
+            edgecolor='#E2E8F0', fontsize=10
         )
         legend.get_title().set_fontweight('bold')
         legend.get_title().set_color('#64748B')
 
-    # tight_layout автоматически пересчитает границы так, чтобы легенда влезла без обрезки
-    canvas.fig.tight_layout()
+    # Обработчик клика
+        # Обработчик клика
+    def on_pick(event):
+        try:
+            if on_click_callback and hasattr(event.artist, 'get_gid'):
+                cat_name = event.artist.get_gid()
+                if cat_name:
+                    on_click_callback(cat_name)
+        except Exception as e:
+            print(f"Ошибка при клике на график: {e}")
 
+    canvas.mpl_connect('pick_event', on_pick)
+    canvas.fig.tight_layout()
     layout.addWidget(canvas)
     widget.setLayout(layout)
     return widget

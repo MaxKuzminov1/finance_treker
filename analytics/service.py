@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
+from scipy import stats
 from typing import List, Dict
-from datetime import date, timedelta
+from datetime import date
 from analytics.models import (
     KPIData, TimeSeriesPoint, CategoryShare, ReportRow, GroupBy, AnalyticsTrend, PeriodComparison
 )
@@ -12,11 +13,11 @@ class AnalyticsService:
         self.repo = repo
 
     def calculate_kpi(self, date_from: date, date_to: date) -> KPIData:
-        stats = self.repo.get_detailed_stats(date_from, date_to)
+        stats_data = self.repo.get_detailed_stats(date_from, date_to)
         days = max((date_to - date_from).days, 1)
 
-        income = float(stats.get('total_income') or 0)
-        expense = float(stats.get('total_expense') or 0)
+        income = float(stats_data.get('total_income') or 0)
+        expense = float(stats_data.get('total_expense') or 0)
         profit = income - expense
 
         return KPIData(
@@ -27,36 +28,43 @@ class AnalyticsService:
             avg_income_day=income / days,
             avg_expense_day=expense / days,
             savings_rate=((income - expense) / income * 100) if income > 0 else 0,
-            avg_check=float(stats.get('avg_check') or 0),
-            transaction_count=int(stats.get('tx_count') or 0),
+            avg_check=float(stats_data.get('avg_check') or 0),
+            transaction_count=int(stats_data.get('tx_count') or 0),
             top_expense_category=self.repo.get_top_category(date_from, date_to, 'expense'),
             top_income_source=self.repo.get_top_category(date_from, date_to, 'income'),
             financial_stability_ratio=(income / expense) if expense > 0 else 0
         )
 
     def get_trends_and_forecast(self) -> AnalyticsTrend:
-        data = self.repo.get_historical_data_for_forecast(6)
-        if len(data) < 2:
-            return AnalyticsTrend(0, 'stable')
+        data = self.repo.get_historical_data_for_forecast(12)  # Анализируем год
+        if len(data) < 3:
+            return AnalyticsTrend(0, 'stable', [])
 
         df = pd.DataFrame(data)
         df['expense'] = df['expense'].astype(float)
 
+        # 1. Прогноз (взвешенная регрессия - последние месяцы важнее)
         y = df['expense'].values
-        x = np.arange(len(y))
-        z = np.polyfit(x, y, 1)
-        p = np.poly1d(z)
+        weights = np.linspace(0.5, 1.5, len(y))
+        z = np.polyfit(np.arange(len(y)), y, 1, w=weights)
+        forecast = np.polyval(z, len(y))
 
-        forecast = p(len(y))
-        direction = 'up' if z[0] > 0.05 else 'down' if z[0] < -0.05 else 'stable'
-
+        # Тренд в процентах от среднего
         mean_exp = df['expense'].mean()
-        std_exp = df['expense'].std() or 1
-        anomalies = df[abs(df['expense'] - mean_exp) > (2 * std_exp)].to_dict('records')
+        trend_pct = (z[0] / mean_exp) * 100 if mean_exp > 0 else 0
+        direction = 'up' if trend_pct > 2 else 'down' if trend_pct < -2 else 'stable'
 
-        return AnalyticsTrend(forecast_next_period=float(max(0, forecast)),
-                              trend_direction=direction,
-                              anomalies=anomalies)
+        # 2. Поиск аномалий через Z-Score (робастный метод)
+        # Отлавливаем отклонения > 1.8 стандартных отклонений
+        df['z_score'] = np.abs(stats.zscore(df['expense']))
+        anomalies_df = df[df['z_score'] > 1.8]
+        anomalies = anomalies_df[['period_label', 'expense']].to_dict('records')
+
+        return AnalyticsTrend(
+            forecast_next_period=float(max(0, forecast)),
+            trend_direction=direction,
+            anomalies=anomalies
+        )
 
     def get_category_shares(self, date_from: date, date_to: date, type_filter: str) -> List[CategoryShare]:
         rows = self.repo.get_category_breakdown(date_from, date_to, type_filter)
@@ -103,3 +111,45 @@ class AnalyticsService:
 
     def get_budget_vs_actual(self, date_from: date, date_to: date) -> List[dict]:
         return self.repo.get_budget_comparison(date_from, date_to)
+
+    def export_pl_excel(self, date_from: date, date_to: date, filepath: str):
+        """Формирует P&L (Profit & Loss) отчет по стандартам фин. учета."""
+        incomes = self.repo.get_category_breakdown(date_from, date_to, 'income')
+        expenses = self.repo.get_category_breakdown(date_from, date_to, 'expense')
+
+        data = []
+        data.append({"Статья": "ДОХОДЫ (ВЫРУЧКА)", "Сумма, ₽": ""})
+        total_income = 0
+        for inc in incomes:
+            amt = float(inc['amount'])
+            total_income += amt
+            data.append({"Статья": f"  {inc['category_name']}", "Сумма, ₽": amt})
+        data.append({"Статья": "ИТОГО ДОХОДЫ:", "Сумма, ₽": total_income})
+        data.append({"Статья": "", "Сумма, ₽": ""})  # Пустая строка
+
+        data.append({"Статья": "РАСХОДЫ (СЕБЕСТОИМОСТЬ И ОПЕРАЦИОННЫЕ)", "Сумма, ₽": ""})
+        total_expense = 0
+        for exp in expenses:
+            amt = float(exp['amount'])
+            total_expense += amt
+            data.append({"Статья": f"  {exp['category_name']}", "Сумма, ₽": amt})
+        data.append({"Статья": "ИТОГО РАСХОДЫ:", "Сумма, ₽": total_expense})
+        data.append({"Статья": "", "Сумма, ₽": ""})
+
+        profit = total_income - total_expense
+        margin = (profit / total_income * 100) if total_income > 0 else 0
+
+        data.append({"Статья": "ЧИСТАЯ ПРИБЫЛЬ (EBITDA):", "Сумма, ₽": profit})
+        data.append({"Статья": "Рентабельность по чистой прибыли, %:", "Сумма, ₽": round(margin, 2)})
+
+        df = pd.DataFrame(data)
+
+        # Сохраняем в Excel с автошириной колонок
+        writer = pd.ExcelWriter(filepath, engine='openpyxl')
+        df.to_excel(writer, index=False, sheet_name='P&L Отчет')
+
+        # Форматирование колонок
+        worksheet = writer.sheets['P&L Отчет']
+        worksheet.column_dimensions['A'].width = 45
+        worksheet.column_dimensions['B'].width = 20
+        writer.close()
