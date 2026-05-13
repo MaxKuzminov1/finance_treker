@@ -7,6 +7,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QDate, Qt, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QFont, QColor, QLinearGradient, QBrush, QPalette
 from references.AnimatedButton import AnimatedButton
+from datetime import datetime, date
+from .form import TransactionForm
 
 class Module1Widget(QWidget):
     """Модуль 1. Учёт операций"""

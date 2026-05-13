@@ -1,8 +1,33 @@
+# references/controller.py
+import MySQLdb
 from .repository import Repository
 
-
-class Controller:
+class DBController:
     def __init__(self):
+        self.conn = MySQLdb.connect(
+            host="localhost",
+            user="root",
+            passwd="root",
+            db="finance_db",
+            charset="utf8mb4"
+        )
+
+    def execute(self, query, params=None, fetch=False):
+        cursor = self.conn.cursor()
+        cursor.execute(query, params or ())
+
+        if fetch:
+            result = cursor.fetchall()
+            cursor.close()
+            return result
+
+        self.conn.commit()
+        cursor.close()
+
+
+class Controller(DBController):  # Наследуем от DBController
+    def __init__(self):
+        super().__init__()  # Инициализируем DBController
         self.repository = Repository()
 
     def create(self, data):
