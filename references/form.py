@@ -1,11 +1,11 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QComboBox, QDateEdit, QPushButton, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox, QTabWidget,
-    QWidget, QSpinBox, QFrame, QScrollArea
+    QTableWidgetItem, QHeaderView, QMessageBox, QFrame,
+    QScrollArea, QWidget
 )
 from PyQt6.QtCore import QDate, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QIcon
+from PyQt6.QtGui import QColor, QFont
 
 from datetime import datetime
 
@@ -20,8 +20,9 @@ class TransactionForm(QDialog):
 
         self.setWindowTitle("✏️ Редактирование операции" if transaction_id else "➕ Добавление операции")
         self.setModal(True)
-        self.resize(900, 750)
-        self.setMinimumSize(800, 650)
+        self.resize(1000, 800)
+        self.setMinimumSize(900, 700)
+        self.setStyleSheet("background-color: #F8FAFC;")
 
         # Убираем кнопку помощи
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
@@ -41,14 +42,17 @@ class TransactionForm(QDialog):
         main_layout.setContentsMargins(25, 25, 25, 25)
 
         # Заголовок
-        title_label = QLabel(self.get_window_title())
-        title_label.setStyleSheet("""
-            font-size: 22px;
-            font-weight: bold;
-            color: #2c3e50;
-            padding-bottom: 15px;
-        """)
-        main_layout.addWidget(title_label)
+        header = QHBoxLayout()
+        title_vbox = QVBoxLayout()
+        title_vbox.addWidget(
+            QLabel("✏️ Редактирование операции" if self.transaction_id else "➕ Добавление операции",
+                   styleSheet="font-size: 24px; font-weight: bold; color: #1E293B;"))
+        title_vbox.addWidget(QLabel("Заполните информацию о транзакции",
+                                    styleSheet="color: #64748B; font-size: 13px;"))
+
+        header.addLayout(title_vbox)
+        header.addStretch()
+        main_layout.addLayout(header)
 
         # Создаем область прокрутки
         scroll_area = QScrollArea()
@@ -60,20 +64,17 @@ class TransactionForm(QDialog):
             }
             QScrollBar:vertical {
                 border: none;
-                background: #f0f0f0;
-                width: 12px;
-                border-radius: 6px;
+                background: #F1F5F9;
+                width: 10px;
+                border-radius: 5px;
             }
             QScrollBar::handle:vertical {
-                background: #c0c0c0;
-                border-radius: 6px;
+                background: #CBD5E1;
+                border-radius: 5px;
                 min-height: 30px;
             }
             QScrollBar::handle:vertical:hover {
-                background: #a0a0a0;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
+                background: #94A3B8;
             }
         """)
 
@@ -83,36 +84,41 @@ class TransactionForm(QDialog):
         container_layout.setSpacing(20)
         container_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Основная информация
+        # Основная информация (карточка)
         info_frame = QFrame()
         info_frame.setStyleSheet("""
             QFrame {
                 background: white;
                 border-radius: 12px;
-                padding: 20px;
+                border: 1px solid #E2E8F0;
             }
         """)
         info_layout = QVBoxLayout(info_frame)
+        info_layout.setContentsMargins(20, 20, 20, 20)
         info_layout.setSpacing(15)
 
         # Тип операции
         type_widget = QWidget()
         type_layout = QHBoxLayout(type_widget)
         type_layout.setContentsMargins(0, 0, 0, 0)
-        type_label = QLabel("📊 Тип операции:")
-        type_label.setStyleSheet("font-weight: bold; color: #2c3e50; min-width: 120px;")
+        type_label = QLabel("Тип операции")
+        type_label.setStyleSheet("color: #64748B; font-weight: bold; font-size: 12px; min-width: 120px;")
         self.type_combo = QComboBox()
         self.type_combo.addItems(["💰 Доход", "💸 Расход"])
         self.type_combo.setStyleSheet("""
             QComboBox {
-                padding: 10px;
-                border: 2px solid #e1e8ed;
+                padding: 8px 12px;
+                border: 1px solid #CBD5E1;
                 border-radius: 8px;
                 background: white;
                 min-width: 200px;
+                font-size: 13px;
             }
             QComboBox:hover {
-                border-color: #3498db;
+                border-color: #4F46E5;
+            }
+            QComboBox:focus {
+                border-color: #4F46E5;
             }
         """)
         self.type_combo.currentIndexChanged.connect(self.on_type_changed)
@@ -125,22 +131,23 @@ class TransactionForm(QDialog):
         date_widget = QWidget()
         date_layout = QHBoxLayout(date_widget)
         date_layout.setContentsMargins(0, 0, 0, 0)
-        date_label = QLabel("📅 Дата операции:")
-        date_label.setStyleSheet("font-weight: bold; color: #2c3e50; min-width: 120px;")
+        date_label = QLabel("Дата операции")
+        date_label.setStyleSheet("color: #64748B; font-weight: bold; font-size: 12px; min-width: 120px;")
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setDisplayFormat("dd.MM.yyyy")
         self.date_edit.setStyleSheet("""
             QDateEdit {
-                padding: 10px;
-                border: 2px solid #e1e8ed;
+                padding: 8px 12px;
+                border: 1px solid #CBD5E1;
                 border-radius: 8px;
                 background: white;
                 min-width: 200px;
+                font-size: 13px;
             }
             QDateEdit:hover {
-                border-color: #3498db;
+                border-color: #4F46E5;
             }
         """)
         date_layout.addWidget(date_label)
@@ -152,21 +159,21 @@ class TransactionForm(QDialog):
         amount_widget = QWidget()
         amount_layout = QHBoxLayout(amount_widget)
         amount_layout.setContentsMargins(0, 0, 0, 0)
-        amount_label = QLabel("💰 Общая сумма:")
-        amount_label.setStyleSheet("font-weight: bold; color: #2c3e50; min-width: 120px;")
+        amount_label = QLabel("Общая сумма")
+        amount_label.setStyleSheet("color: #64748B; font-weight: bold; font-size: 12px; min-width: 120px;")
         self.amount_input = QLineEdit()
         self.amount_input.setPlaceholderText("0.00")
         self.amount_input.setStyleSheet("""
             QLineEdit {
-                padding: 10px;
-                border: 2px solid #e1e8ed;
+                padding: 8px 12px;
+                border: 1px solid #CBD5E1;
                 border-radius: 8px;
                 background: white;
                 min-width: 200px;
-                font-size: 14px;
+                font-size: 13px;
             }
             QLineEdit:focus {
-                border-color: #3498db;
+                border-color: #4F46E5;
             }
         """)
         amount_layout.addWidget(amount_label)
@@ -178,20 +185,21 @@ class TransactionForm(QDialog):
         comment_widget = QWidget()
         comment_layout = QHBoxLayout(comment_widget)
         comment_layout.setContentsMargins(0, 0, 0, 0)
-        comment_label = QLabel("💬 Комментарий:")
-        comment_label.setStyleSheet("font-weight: bold; color: #2c3e50; min-width: 120px;")
+        comment_label = QLabel("Комментарий")
+        comment_label.setStyleSheet("color: #64748B; font-weight: bold; font-size: 12px; min-width: 120px;")
         self.comment_input = QLineEdit()
         self.comment_input.setPlaceholderText("Введите комментарий (необязательно)...")
         self.comment_input.setStyleSheet("""
             QLineEdit {
-                padding: 10px;
-                border: 2px solid #e1e8ed;
+                padding: 8px 12px;
+                border: 1px solid #CBD5E1;
                 border-radius: 8px;
                 background: white;
                 min-width: 300px;
+                font-size: 13px;
             }
             QLineEdit:focus {
-                border-color: #3498db;
+                border-color: #4F46E5;
             }
         """)
         comment_layout.addWidget(comment_label)
@@ -201,87 +209,129 @@ class TransactionForm(QDialog):
 
         container_layout.addWidget(info_frame)
 
-        # Разделитель
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setStyleSheet("background-color: #e1e8ed; max-height: 2px; margin: 10px 0;")
-        container_layout.addWidget(separator)
+        # Категории (карточка)
+        categories_card = QFrame()
+        categories_card.setStyleSheet("""
+            QFrame {
+                background: white;
+                border-radius: 12px;
+                border: 1px solid #E2E8F0;
+            }
+        """)
+        categories_layout = QVBoxLayout(categories_card)
+        categories_layout.setContentsMargins(20, 20, 20, 20)
+        categories_layout.setSpacing(15)
 
-        # Категории
+        categories_header = QHBoxLayout()
         categories_label = QLabel("📂 Распределение по категориям")
-        categories_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin: 10px 0;")
-        container_layout.addWidget(categories_label)
+        categories_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #1E293B;")
+        categories_header.addWidget(categories_label)
+        categories_header.addStretch()
+        categories_layout.addLayout(categories_header)
 
-        # Таблица категорий с фиксированной высотой
+        # Таблица категорий
         self.categories_table = QTableWidget()
         self.categories_table.setColumnCount(3)
-        self.categories_table.setHorizontalHeaderLabels(["Категория", "Сумма (₽)", "Действия"])
+        self.categories_table.setHorizontalHeaderLabels(["Категория", "Сумма (₽)", ""])
         self.setup_table_style(self.categories_table)
         self.categories_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.categories_table.setColumnWidth(1, 150)
-        self.categories_table.setColumnWidth(2, 100)
-        self.categories_table.setMinimumHeight(200)
-        self.categories_table.setMaximumHeight(300)
-        container_layout.addWidget(self.categories_table)
+        self.categories_table.setColumnWidth(2, 60)
+        self.categories_table.setMinimumHeight(150)
+        self.categories_table.setMaximumHeight(250)
+        categories_layout.addWidget(self.categories_table)
 
-        # Кнопки для категорий
-        cat_buttons_layout = QHBoxLayout()
-        self.add_category_btn = QPushButton("➕ Добавить категорию")
-        self.add_category_btn.setStyleSheet(self.get_button_style("#27ae60", "#229954"))
+        # Кнопка добавления
+        self.add_category_btn = QPushButton("+ Добавить категорию")
+        self.add_category_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4F46E5;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #6366F1;
+            }
+        """)
         self.add_category_btn.clicked.connect(self.add_category_row)
-        cat_buttons_layout.addWidget(self.add_category_btn)
-        cat_buttons_layout.addStretch()
-        container_layout.addLayout(cat_buttons_layout)
+        categories_layout.addWidget(self.add_category_btn)
 
-        # Разделитель
-        separator2 = QFrame()
-        separator2.setFrameShape(QFrame.Shape.HLine)
-        separator2.setStyleSheet("background-color: #e1e8ed; max-height: 2px; margin: 20px 0 10px 0;")
-        container_layout.addWidget(separator2)
+        container_layout.addWidget(categories_card)
 
-        # Платежи
+        # Платежи (карточка)
+        payments_card = QFrame()
+        payments_card.setStyleSheet("""
+            QFrame {
+                background: white;
+                border-radius: 12px;
+                border: 1px solid #E2E8F0;
+            }
+        """)
+        payments_layout = QVBoxLayout(payments_card)
+        payments_layout.setContentsMargins(20, 20, 20, 20)
+        payments_layout.setSpacing(15)
+
+        payments_header = QHBoxLayout()
         payments_label = QLabel("💳 График платежей")
-        payments_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin: 10px 0;")
-        container_layout.addWidget(payments_label)
+        payments_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #1E293B;")
+        payments_header.addWidget(payments_label)
+        payments_header.addStretch()
+        payments_layout.addLayout(payments_header)
 
-        # Таблица платежей с фиксированной высотой
+        # Таблица платежей
         self.payments_table = QTableWidget()
         self.payments_table.setColumnCount(3)
-        self.payments_table.setHorizontalHeaderLabels(["Дата платежа", "Сумма (₽)", "Действия"])
+        self.payments_table.setHorizontalHeaderLabels(["Дата платежа", "Сумма (₽)", ""])
         self.setup_table_style(self.payments_table)
         self.payments_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.payments_table.setColumnWidth(1, 150)
-        self.payments_table.setColumnWidth(2, 100)
-        self.payments_table.setMinimumHeight(200)
-        self.payments_table.setMaximumHeight(300)
-        container_layout.addWidget(self.payments_table)
+        self.payments_table.setColumnWidth(2, 60)
+        self.payments_table.setMinimumHeight(150)
+        self.payments_table.setMaximumHeight(250)
+        payments_layout.addWidget(self.payments_table)
 
-        # Кнопки для платежей
-        payment_buttons_layout = QHBoxLayout()
-        self.add_payment_btn = QPushButton("➕ Добавить платеж")
-        self.add_payment_btn.setStyleSheet(self.get_button_style("#27ae60", "#229954"))
+        # Кнопка добавления
+        self.add_payment_btn = QPushButton("+ Добавить платеж")
+        self.add_payment_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4F46E5;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #6366F1;
+            }
+        """)
         self.add_payment_btn.clicked.connect(self.add_payment_row)
-        payment_buttons_layout.addWidget(self.add_payment_btn)
-        payment_buttons_layout.addStretch()
-        container_layout.addLayout(payment_buttons_layout)
+        payments_layout.addWidget(self.add_payment_btn)
 
-        # Итоговая информация
+        container_layout.addWidget(payments_card)
+
+        # Итоговая информация (карточка)
         info_panel = QFrame()
         info_panel.setStyleSheet("""
             QFrame {
-                background: #ecf0f1;
-                border-radius: 10px;
-                padding: 15px;
-                margin-top: 20px;
+                background: #F1F5F9;
+                border-radius: 12px;
+                border: 1px solid #E2E8F0;
             }
         """)
         info_panel_layout = QHBoxLayout(info_panel)
+        info_panel_layout.setContentsMargins(20, 15, 20, 15)
 
         self.total_categories_label = QLabel("📊 Сумма по категориям: 0.00 ₽")
-        self.total_categories_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
+        self.total_categories_label.setStyleSheet("font-weight: bold; color: #475569; font-size: 13px;")
 
         self.total_payments_label = QLabel("💳 Сумма по платежам: 0.00 ₽")
-        self.total_payments_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
+        self.total_payments_label.setStyleSheet("font-weight: bold; color: #475569; font-size: 13px;")
 
         info_panel_layout.addWidget(self.total_categories_label)
         info_panel_layout.addStretch()
@@ -289,28 +339,53 @@ class TransactionForm(QDialog):
 
         container_layout.addWidget(info_panel)
 
-        # Добавляем растяжку в конце контейнера
+        # Добавляем растяжку
         container_layout.addStretch()
 
         # Устанавливаем контейнер в scroll area
         scroll_area.setWidget(container)
-
-        # Добавляем scroll area в основной layout
         main_layout.addWidget(scroll_area)
 
-        # Кнопки внизу (вне скролла)
+        # Кнопки внизу
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(15)
 
         self.save_btn = QPushButton("✓ Сохранить")
-        self.save_btn.setStyleSheet(self.get_button_style("#27ae60", "#229954", True))
+        self.save_btn.setStyleSheet("""
+            QPushButton {
+                background: #0F172A;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 30px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background: #1E293B;
+            }
+        """)
         self.save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_btn.setMinimumHeight(45)
         self.save_btn.setMinimumWidth(150)
         self.save_btn.clicked.connect(self.save)
 
         self.cancel_btn = QPushButton("✗ Отмена")
-        self.cancel_btn.setStyleSheet(self.get_button_style("#95a5a6", "#7f8c8d", True))
+        self.cancel_btn.setStyleSheet("""
+            QPushButton {
+                background: white;
+                color: #475569;
+                border: 1px solid #CBD5E1;
+                border-radius: 8px;
+                padding: 12px 30px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background: #F1F5F9;
+                border-color: #94A3B8;
+            }
+        """)
         self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_btn.setMinimumHeight(45)
         self.cancel_btn.setMinimumWidth(150)
@@ -331,56 +406,25 @@ class TransactionForm(QDialog):
         # Подключаем обновление итогов
         self.update_totals()
 
-    def get_window_title(self):
-        return "✏️ Редактирование операции" if self.transaction_id else "➕ Добавление операции"
-
-    def get_button_style(self, color, hover_color, large=False):
-        if large:
-            padding = "12px 30px"
-            font_size = "14px"
-        else:
-            padding = "8px 20px"
-            font_size = "12px"
-
-        return f"""
-            QPushButton {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {color}, stop:1 {hover_color});
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: {padding};
-                font-weight: bold;
-                font-size: {font_size};
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {hover_color}, stop:1 {color});
-            }}
-            QPushButton:pressed {{
-                background: {hover_color};
-            }}
-        """
-
     def setup_table_style(self, table):
         table.setStyleSheet("""
             QTableWidget {
                 background: white;
-                border-radius: 10px;
-                gridline-color: #e1e8ed;
-                alternate-background-color: #f8f9fc;
-                border: 1px solid #e1e8ed;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+                gridline-color: #F1F5F9;
             }
             QTableWidget::item {
                 padding: 10px;
             }
             QHeaderView::section {
-                background: #f8f9fc;
-                padding: 12px;
+                background: #F8FAFC;
+                padding: 10px;
                 border: none;
-                border-bottom: 2px solid #3498db;
+                border-bottom: 2px solid #E2E8F0;
                 font-weight: bold;
-                color: #2c3e50;
+                color: #475569;
+                font-size: 12px;
             }
         """)
         table.setAlternatingRowColors(True)
@@ -388,7 +432,6 @@ class TransactionForm(QDialog):
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
 
     def on_type_changed(self):
-        """При изменении типа операции обновляем заголовки"""
         self.update_totals()
 
     def add_category_row(self):
@@ -399,34 +442,54 @@ class TransactionForm(QDialog):
         cat_combo = QComboBox()
         for cat in self.categories:
             cat_combo.addItem(f"{cat['name']}", cat['id'])
-        cat_combo.setStyleSheet("padding: 8px; border: 1px solid #ddd; border-radius: 6px;")
+        cat_combo.setStyleSheet("""
+            QComboBox {
+                padding: 6px 8px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                background: white;
+                font-size: 12px;
+            }
+        """)
         self.categories_table.setCellWidget(row, 0, cat_combo)
 
         # Поле для суммы
         amount_input = QLineEdit()
         amount_input.setPlaceholderText("0.00")
-        amount_input.setStyleSheet("padding: 8px; border: 1px solid #ddd; border-radius: 6px;")
+        amount_input.setStyleSheet("""
+            QLineEdit {
+                padding: 6px 8px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                font-size: 12px;
+            }
+            QLineEdit:focus {
+                border-color: #4F46E5;
+            }
+        """)
         amount_input.textChanged.connect(self.update_totals)
         self.categories_table.setCellWidget(row, 1, amount_input)
 
         # Кнопка удаления
-        delete_btn = QPushButton("🗑")
-        delete_btn.setFixedSize(30, 30)
+        delete_btn = QPushButton("✗")
+        delete_btn.setFixedSize(28, 28)
         delete_btn.setStyleSheet("""
             QPushButton {
-                background-color: #e74c3c;
+                background-color: #EF4444;
                 color: white;
+                border: none;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #c0392b;
+                background-color: #DC2626;
             }
         """)
         delete_btn.clicked.connect(lambda: self.delete_category_row(row))
         self.categories_table.setCellWidget(row, 2, delete_btn)
 
-        self.categories_table.setRowHeight(row, 50)
+        self.categories_table.setRowHeight(row, 45)
 
     def delete_category_row(self, row):
         self.categories_table.removeRow(row)
@@ -441,34 +504,53 @@ class TransactionForm(QDialog):
         date_edit.setCalendarPopup(True)
         date_edit.setDate(QDate.currentDate())
         date_edit.setDisplayFormat("dd.MM.yyyy")
-        date_edit.setStyleSheet("padding: 8px; border: 1px solid #ddd; border-radius: 6px;")
+        date_edit.setStyleSheet("""
+            QDateEdit {
+                padding: 6px 8px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                font-size: 12px;
+            }
+        """)
         self.payments_table.setCellWidget(row, 0, date_edit)
 
         # Сумма
         amount_input = QLineEdit()
         amount_input.setPlaceholderText("0.00")
-        amount_input.setStyleSheet("padding: 8px; border: 1px solid #ddd; border-radius: 6px;")
+        amount_input.setStyleSheet("""
+            QLineEdit {
+                padding: 6px 8px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                font-size: 12px;
+            }
+            QLineEdit:focus {
+                border-color: #4F46E5;
+            }
+        """)
         amount_input.textChanged.connect(self.update_totals)
         self.payments_table.setCellWidget(row, 1, amount_input)
 
         # Кнопка удаления
-        delete_btn = QPushButton("🗑")
-        delete_btn.setFixedSize(30, 30)
+        delete_btn = QPushButton("✗")
+        delete_btn.setFixedSize(28, 28)
         delete_btn.setStyleSheet("""
             QPushButton {
-                background-color: #e74c3c;
+                background-color: #EF4444;
                 color: white;
+                border: none;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #c0392b;
+                background-color: #DC2626;
             }
         """)
         delete_btn.clicked.connect(lambda: self.delete_payment_row(row))
         self.payments_table.setCellWidget(row, 2, delete_btn)
 
-        self.payments_table.setRowHeight(row, 50)
+        self.payments_table.setRowHeight(row, 45)
 
     def delete_payment_row(self, row):
         self.payments_table.removeRow(row)
@@ -498,13 +580,13 @@ class TransactionForm(QDialog):
                     pass
 
         # Обновляем цвет в зависимости от типа операции
-        type_color = "#27ae60" if self.type_combo.currentIndex() == 0 else "#e74c3c"
+        type_color = "#10B981" if self.type_combo.currentIndex() == 0 else "#EF4444"
 
         self.total_categories_label.setText(f"📊 Сумма по категориям: {total_categories:,.2f} ₽")
-        self.total_categories_label.setStyleSheet(f"font-weight: bold; color: {type_color};")
+        self.total_categories_label.setStyleSheet(f"font-weight: bold; color: {type_color}; font-size: 13px;")
 
         self.total_payments_label.setText(f"💳 Сумма по платежам: {total_payments:,.2f} ₽")
-        self.total_payments_label.setStyleSheet(f"font-weight: bold; color: {type_color};")
+        self.total_payments_label.setStyleSheet(f"font-weight: bold; color: {type_color}; font-size: 13px;")
 
     def load_transaction_data(self):
         """Загрузка данных транзакции для редактирования"""
@@ -549,32 +631,52 @@ class TransactionForm(QDialog):
                 cat_combo.addItem(f"{c['name']}", c['id'])
                 if c["id"] == cat["category_id"]:
                     cat_combo.setCurrentIndex(cat_combo.count() - 1)
-            cat_combo.setStyleSheet("padding: 8px; border: 1px solid #ddd; border-radius: 6px;")
+            cat_combo.setStyleSheet("""
+                QComboBox {
+                    padding: 6px 8px;
+                    border: 1px solid #CBD5E1;
+                    border-radius: 6px;
+                    background: white;
+                    font-size: 12px;
+                }
+            """)
             self.categories_table.setCellWidget(row, 0, cat_combo)
 
             amount_input = QLineEdit()
             amount_input.setText(str(cat["amount"]))
-            amount_input.setStyleSheet("padding: 8px; border: 1px solid #ddd; border-radius: 6px;")
+            amount_input.setStyleSheet("""
+                QLineEdit {
+                    padding: 6px 8px;
+                    border: 1px solid #CBD5E1;
+                    border-radius: 6px;
+                    font-size: 12px;
+                }
+                QLineEdit:focus {
+                    border-color: #4F46E5;
+                }
+            """)
             amount_input.textChanged.connect(self.update_totals)
             self.categories_table.setCellWidget(row, 1, amount_input)
 
-            delete_btn = QPushButton("🗑")
-            delete_btn.setFixedSize(30, 30)
+            delete_btn = QPushButton("✗")
+            delete_btn.setFixedSize(28, 28)
             delete_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #e74c3c;
+                    background-color: #EF4444;
                     color: white;
+                    border: none;
                     border-radius: 6px;
-                    font-size: 14px;
+                    font-size: 12px;
+                    font-weight: bold;
                 }
                 QPushButton:hover {
-                    background-color: #c0392b;
+                    background-color: #DC2626;
                 }
             """)
             delete_btn.clicked.connect(lambda: self.delete_category_row(row))
             self.categories_table.setCellWidget(row, 2, delete_btn)
 
-            self.categories_table.setRowHeight(row, 50)
+            self.categories_table.setRowHeight(row, 45)
 
         # Загружаем платежи
         self.payments_table.setRowCount(0)
@@ -595,32 +697,51 @@ class TransactionForm(QDialog):
 
             date_edit.setDate(QDate(payment_date.year, payment_date.month, payment_date.day))
             date_edit.setDisplayFormat("dd.MM.yyyy")
-            date_edit.setStyleSheet("padding: 8px; border: 1px solid #ddd; border-radius: 6px;")
+            date_edit.setStyleSheet("""
+                QDateEdit {
+                    padding: 6px 8px;
+                    border: 1px solid #CBD5E1;
+                    border-radius: 6px;
+                    font-size: 12px;
+                }
+            """)
             self.payments_table.setCellWidget(row, 0, date_edit)
 
             amount_input = QLineEdit()
             amount_input.setText(str(payment["amount"]))
-            amount_input.setStyleSheet("padding: 8px; border: 1px solid #ddd; border-radius: 6px;")
+            amount_input.setStyleSheet("""
+                QLineEdit {
+                    padding: 6px 8px;
+                    border: 1px solid #CBD5E1;
+                    border-radius: 6px;
+                    font-size: 12px;
+                }
+                QLineEdit:focus {
+                    border-color: #4F46E5;
+                }
+            """)
             amount_input.textChanged.connect(self.update_totals)
             self.payments_table.setCellWidget(row, 1, amount_input)
 
-            delete_btn = QPushButton("🗑")
-            delete_btn.setFixedSize(30, 30)
+            delete_btn = QPushButton("✗")
+            delete_btn.setFixedSize(28, 28)
             delete_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #e74c3c;
+                    background-color: #EF4444;
                     color: white;
+                    border: none;
                     border-radius: 6px;
-                    font-size: 14px;
+                    font-size: 12px;
+                    font-weight: bold;
                 }
                 QPushButton:hover {
-                    background-color: #c0392b;
+                    background-color: #DC2626;
                 }
             """)
             delete_btn.clicked.connect(lambda: self.delete_payment_row(row))
             self.payments_table.setCellWidget(row, 2, delete_btn)
 
-            self.payments_table.setRowHeight(row, 50)
+            self.payments_table.setRowHeight(row, 45)
 
     def save(self):
         try:

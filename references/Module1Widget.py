@@ -1,14 +1,16 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QLineEdit,
-    QComboBox, QLabel, QDateEdit, QListWidget, QFrame,
-    QGraphicsDropShadowEffect, QMessageBox, QStackedWidget
+    QComboBox, QLabel, QDateEdit, QFrame,
+    QMessageBox, QFileDialog
 )
-from PyQt6.QtCore import QDate, Qt, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QColor, QLinearGradient, QBrush, QPalette
-from references.AnimatedButton import AnimatedButton
+from PyQt6.QtCore import QDate, Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 from datetime import datetime, date
+import pandas as pd
+
 from .form import TransactionForm
+
 
 class Module1Widget(QWidget):
     """Модуль 1. Учёт операций"""
@@ -16,166 +18,281 @@ class Module1Widget(QWidget):
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
+        self.setStyleSheet("background-color: #F8FAFC;")
         self.init_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(35, 35, 35, 35)
-        layout.setSpacing(25)
+        # Основной layout
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(25, 25, 25, 25)
+        main_layout.setSpacing(20)
 
-        # HEADER
-        header = QFrame()
-        header.setObjectName("header")
+        # ЗАГОЛОВОК
+        header = QHBoxLayout()
+        title_vbox = QVBoxLayout()
+        title_vbox.addWidget(
+            QLabel("Модуль 1. Учёт операций",
+                   styleSheet="font-size: 24px; font-weight: bold; color: #1E293B;"))
+        title_vbox.addWidget(QLabel("Ввод и управление доходами и расходами | Полный контроль ваших финансов",
+                                    styleSheet="color: #64748B; font-size: 13px;"))
 
-        gradient = QLinearGradient(0, 0, 1000, 0)
-        gradient.setColorAt(0, QColor(52, 152, 219))
-        gradient.setColorAt(1, QColor(155, 89, 182))
-
-        palette = header.palette()
-        palette.setBrush(QPalette.ColorRole.Window, QBrush(gradient))
-        header.setPalette(palette)
-        header.setAutoFillBackground(True)
-
-        header_layout = QVBoxLayout()
-        header_layout.setSpacing(8)
-
-        title = QLabel("Модуль 1. Учёт операций")
-        title.setObjectName("title")
-
-        subtitle = QLabel("Ввод и управление доходами и расходами | Полный контроль ваших финансов")
-        subtitle.setObjectName("subtitle")
-
-        header_layout.addWidget(title)
-        header_layout.addWidget(subtitle)
-        header.setLayout(header_layout)
-
-        header_shadow = QGraphicsDropShadowEffect()
-        header_shadow.setBlurRadius(15)
-        header_shadow.setColor(QColor(0, 0, 0, 30))
-        header_shadow.setOffset(0, 4)
-        header.setGraphicsEffect(header_shadow)
-
-        layout.addWidget(header)
+        header.addLayout(title_vbox)
+        header.addStretch()
+        main_layout.addLayout(header)
 
         # КАРТОЧКА ФИЛЬТРОВ
         filter_card = QFrame()
-        filter_card.setObjectName("filter_card")
-
-        card_shadow = QGraphicsDropShadowEffect()
-        card_shadow.setBlurRadius(15)
-        card_shadow.setColor(QColor(0, 0, 0, 20))
-        card_shadow.setOffset(0, 2)
-        filter_card.setGraphicsEffect(card_shadow)
+        filter_card.setStyleSheet("""
+            QFrame {
+                background: white;
+                border-radius: 12px;
+                border: 1px solid #E2E8F0;
+            }
+        """)
 
         filter_layout = QVBoxLayout()
-        filter_layout.setSpacing(20)
-        filter_layout.setContentsMargins(25, 20, 25, 20)
+        filter_layout.setSpacing(15)
+        filter_layout.setContentsMargins(20, 20, 20, 20)
 
         # Поиск
-        search_label = QLabel("🔍 Поиск операций (по комментарию)")
-        search_label.setObjectName("search_label")
+        search_label = QLabel("🔍 Поиск операций")
+        search_label.setStyleSheet("color: #475569; font-weight: bold; font-size: 12px;")
         filter_layout.addWidget(search_label)
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("Введите текст для поиска в комментарии...")
-        self.search.setObjectName("search_input")
+        self.search.setStyleSheet("""
+            QLineEdit {
+                padding: 8px 12px;
+                border: 1px solid #CBD5E1;
+                border-radius: 8px;
+                background: white;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border-color: #4F46E5;
+            }
+        """)
         filter_layout.addWidget(self.search)
 
-        # Период и категория
-        filters_grid = QHBoxLayout()
-        filters_grid.setSpacing(20)
+        # Строка фильтров
+        filters_row = QHBoxLayout()
+        filters_row.setSpacing(15)
 
         # Период
-        period_widget = QFrame()
-        period_widget.setObjectName("period_widget")
-        period_layout = QHBoxLayout()
-        period_layout.setSpacing(10)
+        period_frame = QFrame()
+        period_frame.setStyleSheet("""
+            QFrame {
+                background: #F8FAFC;
+                border-radius: 8px;
+                padding: 5px;
+            }
+        """)
+        period_layout = QHBoxLayout(period_frame)
+        period_layout.setSpacing(8)
+        period_layout.setContentsMargins(10, 5, 10, 5)
 
         period_label = QLabel("📅 Период:")
-        period_label.setObjectName("filter_label")
+        period_label.setStyleSheet("color: #475569; font-weight: bold; font-size: 12px;")
 
         self.date_from = QDateEdit()
         self.date_from.setCalendarPopup(True)
         self.date_from.setDate(QDate.currentDate().addMonths(-1))
         self.date_from.setDisplayFormat("dd.MM.yyyy")
-        self.date_from.setObjectName("date_edit")
+        self.date_from.setStyleSheet("""
+            QDateEdit {
+                padding: 6px 10px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                background: white;
+                font-size: 12px;
+            }
+        """)
 
         date_sep = QLabel("→")
-        date_sep.setObjectName("date_sep")
+        date_sep.setStyleSheet("color: #94A3B8; font-weight: bold;")
 
         self.date_to = QDateEdit()
         self.date_to.setCalendarPopup(True)
         self.date_to.setDate(QDate.currentDate())
         self.date_to.setDisplayFormat("dd.MM.yyyy")
-        self.date_to.setObjectName("date_edit")
+        self.date_to.setStyleSheet("""
+            QDateEdit {
+                padding: 6px 10px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                background: white;
+                font-size: 12px;
+            }
+        """)
 
         period_layout.addWidget(period_label)
         period_layout.addWidget(self.date_from)
         period_layout.addWidget(date_sep)
         period_layout.addWidget(self.date_to)
-        period_widget.setLayout(period_layout)
 
         # Тип операции
-        type_widget = QFrame()
-        type_widget.setObjectName("category_widget")
-        type_layout = QHBoxLayout()
-        type_layout.setSpacing(10)
+        type_frame = QFrame()
+        type_frame.setStyleSheet("""
+            QFrame {
+                background: #F8FAFC;
+                border-radius: 8px;
+                padding: 5px;
+            }
+        """)
+        type_layout = QHBoxLayout(type_frame)
+        type_layout.setSpacing(8)
+        type_layout.setContentsMargins(10, 5, 10, 5)
 
         type_label = QLabel("🏷️ Тип:")
-        type_label.setObjectName("filter_label")
+        type_label.setStyleSheet("color: #475569; font-weight: bold; font-size: 12px;")
 
         self.type_filter = QComboBox()
         self.type_filter.addItems(["Все", "💰 Доход", "💸 Расход"])
-        self.type_filter.setObjectName("category_combo")
+        self.type_filter.setStyleSheet("""
+            QComboBox {
+                padding: 6px 10px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                background: white;
+                font-size: 12px;
+                min-width: 120px;
+            }
+            QComboBox:hover {
+                border-color: #4F46E5;
+            }
+        """)
 
         type_layout.addWidget(type_label)
         type_layout.addWidget(self.type_filter)
-        type_widget.setLayout(type_layout)
 
-        # Фильтр по категориям
-        category_widget = QFrame()
-        category_widget.setObjectName("category_widget")
-        category_layout = QHBoxLayout()
-        category_layout.setSpacing(10)
+        # Категория
+        category_frame = QFrame()
+        category_frame.setStyleSheet("""
+            QFrame {
+                background: #F8FAFC;
+                border-radius: 8px;
+                padding: 5px;
+            }
+        """)
+        category_layout = QHBoxLayout(category_frame)
+        category_layout.setSpacing(8)
+        category_layout.setContentsMargins(10, 5, 10, 5)
 
         category_label = QLabel("📁 Категория:")
-        category_label.setObjectName("filter_label")
+        category_label.setStyleSheet("color: #475569; font-weight: bold; font-size: 12px;")
 
         self.category_filter = QComboBox()
         self.category_filter.addItems(["Все категории"])
-        self.category_filter.setObjectName("category_combo")
+        self.category_filter.setStyleSheet("""
+            QComboBox {
+                padding: 6px 10px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                background: white;
+                font-size: 12px;
+                min-width: 150px;
+            }
+            QComboBox:hover {
+                border-color: #4F46E5;
+            }
+        """)
 
         category_layout.addWidget(category_label)
         category_layout.addWidget(self.category_filter)
-        category_widget.setLayout(category_layout)
 
-        filters_grid.addWidget(period_widget)
-        filters_grid.addWidget(type_widget)
-        filters_grid.addWidget(category_widget)
-        filters_grid.addStretch()
+        filters_row.addWidget(period_frame)
+        filters_row.addWidget(type_frame)
+        filters_row.addWidget(category_frame)
+        filters_row.addStretch()
 
-        filter_layout.addLayout(filters_grid)
+        filter_layout.addLayout(filters_row)
 
         # Кнопки действий
         buttons_row = QHBoxLayout()
         buttons_row.setSpacing(12)
 
-        self.add_btn = AnimatedButton("➕ Добавить операцию")
-        self.edit_btn = AnimatedButton("✏️ Редактировать")
-        self.delete_btn = AnimatedButton("🗑 Удалить")
-        self.reset_btn = AnimatedButton("🔄 Сброс")
-        export_btn = AnimatedButton("📤 Экспорт")
-        import_btn = AnimatedButton("📥 Импорт")
+        self.add_btn = QPushButton("➕ Добавить операцию")
+        self.edit_btn = QPushButton("✏️ Редактировать")
+        self.delete_btn = QPushButton("🗑 Удалить")
+        self.reset_btn = QPushButton("🔄 Сброс")
+        export_btn = QPushButton("📤 Экспорт")
+        import_btn = QPushButton("📥 Импорт")
 
-        for btn in [self.add_btn, self.edit_btn, self.delete_btn, self.reset_btn, export_btn, import_btn]:
-            btn.setObjectName("action_btn")
+        button_style = """
+            QPushButton {
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+        """
 
-        self.add_btn.setProperty("class", "primary")
-        self.edit_btn.setProperty("class", "warning")
-        self.delete_btn.setProperty("class", "danger")
-        export_btn.setProperty("class", "success")
-        import_btn.setProperty("class", "warning")
-        self.reset_btn.setProperty("class", "secondary")
+        self.add_btn.setStyleSheet(button_style + """
+            QPushButton {
+                background-color: #4F46E5;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #6366F1;
+            }
+        """)
+
+        self.edit_btn.setStyleSheet(button_style + """
+            QPushButton {
+                background-color: #F59E0B;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #D97706;
+            }
+        """)
+
+        self.delete_btn.setStyleSheet(button_style + """
+            QPushButton {
+                background-color: #EF4444;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #DC2626;
+            }
+        """)
+
+        self.reset_btn.setStyleSheet(button_style + """
+            QPushButton {
+                background-color: #64748B;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #475569;
+            }
+        """)
+
+        export_btn.setStyleSheet(button_style + """
+            QPushButton {
+                background-color: #10B981;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #059669;
+            }
+        """)
+
+        import_btn.setStyleSheet(button_style + """
+            QPushButton {
+                background-color: #8B5CF6;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #7C3AED;
+            }
+        """)
 
         buttons_row.addWidget(self.add_btn)
         buttons_row.addWidget(self.edit_btn)
@@ -187,50 +304,91 @@ class Module1Widget(QWidget):
 
         filter_layout.addLayout(buttons_row)
         filter_card.setLayout(filter_layout)
-        layout.addWidget(filter_card)
+        main_layout.addWidget(filter_card)
 
-        # ТАБЛИЦА
+        # КАРТОЧКА ТАБЛИЦЫ
         table_card = QFrame()
-        table_card.setObjectName("table_card")
-        table_card.setGraphicsEffect(card_shadow)
+        table_card.setStyleSheet("""
+            QFrame {
+                background: white;
+                border-radius: 12px;
+                border: 1px solid #E2E8F0;
+            }
+        """)
 
         table_layout = QVBoxLayout()
         table_layout.setSpacing(15)
-        table_layout.setContentsMargins(25, 20, 25, 20)
+        table_layout.setContentsMargins(20, 20, 20, 20)
 
-        table_header_widget = QFrame()
-        table_header_layout = QHBoxLayout()
-        table_header_layout.setContentsMargins(0, 0, 0, 0)
-
+        # Заголовок таблицы
+        table_header = QHBoxLayout()
         table_title = QLabel("📋 Журнал операций")
-        table_title.setObjectName("table_title")
+        table_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #1E293B;")
 
         self.records_count = QLabel("Записей: 0")
-        self.records_count.setObjectName("records_count_badge")
+        self.records_count.setStyleSheet("""
+            background-color: #F1F5F9;
+            padding: 4px 12px;
+            border-radius: 12px;
+            color: #475569;
+            font-size: 12px;
+            font-weight: bold;
+        """)
 
-        table_header_layout.addWidget(table_title)
-        table_header_layout.addStretch()
-        table_header_layout.addWidget(self.records_count)
-        table_header_widget.setLayout(table_header_layout)
+        table_header.addWidget(table_title)
+        table_header.addStretch()
+        table_header.addWidget(self.records_count)
 
-        table_layout.addWidget(table_header_widget)
+        table_layout.addLayout(table_header)
 
+        # Таблица
         self.table = QTableWidget()
         self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels([
             "ID", "📅 Дата", "📊 Тип", "💰 Сумма",
             "📁 Категории", "💬 Комментарий", "💳 Оплачено", "📊 Остаток", "📌 Статус"
         ])
-        self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setAlternatingRowColors(True)
-        self.table.setObjectName("data_table")
         self.table.setSortingEnabled(True)
+
+        self.table.setStyleSheet("""
+            QTableWidget {
+                background: white;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+                gridline-color: #F1F5F9;
+            }
+            QTableWidget::item {
+                padding: 10px;
+            }
+            QHeaderView::section {
+                background: #F8FAFC;
+                padding: 12px;
+                border: none;
+                border-bottom: 2px solid #E2E8F0;
+                font-weight: bold;
+                color: #475569;
+                font-size: 12px;
+            }
+        """)
+
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setColumnWidth(0, 50)  # ID
+        self.table.setColumnWidth(1, 150)  # Дата
+        self.table.setColumnWidth(2, 100)  # Тип
+        self.table.setColumnWidth(3, 150)  # Сумма
+        self.table.setColumnWidth(4, 150)  # Категории
+        self.table.setColumnWidth(5, 200)  # Комментарий
+        self.table.setColumnWidth(6, 100)  # Оплачено
+        self.table.setColumnWidth(7, 100)  # Остаток
+        self.table.setColumnWidth(8, 100)  # Статус
 
         table_layout.addWidget(self.table)
         table_card.setLayout(table_layout)
-        layout.addWidget(table_card)
+        main_layout.addWidget(table_card)
 
-        self.setLayout(layout)
+        self.setLayout(main_layout)
 
         # Подключаем сигналы
         self.search.textChanged.connect(self.refresh)
@@ -244,6 +402,9 @@ class Module1Widget(QWidget):
         self.reset_btn.clicked.connect(self.reset_filters)
         export_btn.clicked.connect(self.export_data)
         import_btn.clicked.connect(self.import_data)
+
+        # Загружаем категории
+        self.load_categories_for_filter()
 
     def load_categories_for_filter(self):
         """Загрузка категорий для фильтра"""
@@ -273,9 +434,6 @@ class Module1Widget(QWidget):
         self.refresh()
 
     def export_data(self):
-        from PyQt6.QtWidgets import QFileDialog
-        import pandas as pd
-
         try:
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
@@ -375,7 +533,6 @@ class Module1Widget(QWidget):
                 if isinstance(raw_date, datetime):
                     trans_date = raw_date.date()
                 elif isinstance(raw_date, str):
-                    from datetime import date
                     trans_date = datetime.strptime(raw_date[:10], "%Y-%m-%d").date()
                 else:
                     continue
@@ -390,8 +547,8 @@ class Module1Widget(QWidget):
         self.table.setRowCount(len(filtered))
 
         type_colors = {
-            "income": QColor("#27ae60"),
-            "expense": QColor("#e74c3c")
+            "income": QColor("#10B981"),
+            "expense": QColor("#EF4444")
         }
 
         type_icons = {
@@ -400,20 +557,36 @@ class Module1Widget(QWidget):
         }
 
         for i, t in enumerate(filtered):
+            # ID
             self.table.setItem(i, 0, QTableWidgetItem(str(t.get("id", ""))))
-            self.table.setItem(i, 1, QTableWidgetItem(str(t.get("date", ""))))
 
+            # ДАТА - УБИРАЕМ ВРЕМЯ
+            date_value = t.get("date", "")
+            if isinstance(date_value, datetime):
+                date_str = date_value.strftime("%d.%m.%Y")
+            elif isinstance(date_value, str):
+                # Берем только первые 10 символов (YYYY-MM-DD) и преобразуем в формат DD.MM.YYYY
+                if len(date_value) >= 10:
+                    date_str = f"{date_value[8:10]}.{date_value[5:7]}.{date_value[0:4]}"
+                else:
+                    date_str = date_value
+            else:
+                date_str = str(date_value)
+            self.table.setItem(i, 1, QTableWidgetItem(date_str))
+
+            # Тип
             t_type = t.get("type", "")
             type_item = QTableWidgetItem(f"{type_icons.get(t_type, '')} {'Доход' if t_type == 'income' else 'Расход'}")
-            type_item.setForeground(type_colors.get(t_type, QColor("#333")))
+            type_item.setForeground(type_colors.get(t_type, QColor("#475569")))
             self.table.setItem(i, 2, type_item)
 
+            # Сумма
             amount = t.get("total_amount", 0)
             amount_item = QTableWidgetItem(f"{amount:,.2f} ₽")
-            amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight)
+            amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.table.setItem(i, 3, amount_item)
 
-            # категории
+            # Категории
             cats = t.get("categories", [])
             if isinstance(cats, list):
                 names = [str(c.get("name", "")) for c in cats if isinstance(c, dict)]
@@ -423,27 +596,33 @@ class Module1Widget(QWidget):
                 names = []
             self.table.setItem(i, 4, QTableWidgetItem(", ".join(names)))
 
+            # Комментарий
             self.table.setItem(i, 5, QTableWidgetItem(str(t.get("comment", ""))))
 
-            paid_item = QTableWidgetItem(f"{t.get('paid', 0):,.2f} ₽")
-            paid_item.setTextAlignment(Qt.AlignmentFlag.AlignRight)
+            # Оплачено
+            paid = t.get('paid', 0)
+            paid_item = QTableWidgetItem(f"{paid:,.2f} ₽")
+            paid_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.table.setItem(i, 6, paid_item)
 
-            remaining_item = QTableWidgetItem(f"{t.get('remaining', 0):,.2f} ₽")
-            remaining_item.setTextAlignment(Qt.AlignmentFlag.AlignRight)
+            # Остаток
+            remaining = t.get('remaining', 0)
+            remaining_item = QTableWidgetItem(f"{remaining:,.2f} ₽")
+            remaining_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.table.setItem(i, 7, remaining_item)
 
-            status_item = QTableWidgetItem(str(t.get("status", "")))
-            if t.get("status") == "Оплачена":
-                status_item.setForeground(QColor("#27ae60"))
-            elif t.get("status") == "Частично":
-                status_item.setForeground(QColor("#f39c12"))
+            # Статус
+            status = t.get("status", "")
+            status_item = QTableWidgetItem(status)
+            if status == "Оплачена":
+                status_item.setForeground(QColor("#10B981"))
+            elif status == "Частично":
+                status_item.setForeground(QColor("#F59E0B"))
             else:
-                status_item.setForeground(QColor("#e74c3c"))
+                status_item.setForeground(QColor("#EF4444"))
             self.table.setItem(i, 8, status_item)
 
-        self.records_count.setText(f"📊 Найдено записей: {len(filtered)}")
-        self.table.resizeColumnsToContents()
+        self.records_count.setText(f"📊 Записей: {len(filtered)}")
 
     def add(self):
         try:
@@ -488,10 +667,6 @@ class Module1Widget(QWidget):
             QMessageBox.information(self, "Успех", "Операция успешно удалена!")
 
     def import_data(self):
-        from PyQt6.QtWidgets import QFileDialog
-        import pandas as pd
-        from datetime import datetime
-
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Выберите файл для импорта",
@@ -595,4 +770,3 @@ class Module1Widget(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка импорта", str(e))
-
