@@ -27,10 +27,16 @@ class CategoriesView(QWidget):
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.tree.setAlternatingRowColors(True)
         self.tree.setStyleSheet("""
-            QTreeWidget { border: 1px solid #E2E8F0; border-radius: 8px; background-color: white; font-size: 14px; }
-            QTreeWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; }
-            QTreeWidget::item:selected { background-color: #EEF2FF; color: #4F46E5; }
-        """)
+                    QTreeWidget { 
+                        border: 1px solid #E2E8F0; 
+                        border-radius: 8px; 
+                        background-color: white; 
+                        alternate-background-color: #F8FAFC;
+                        font-size: 14px; 
+                    }
+                    QTreeWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; }
+                    QTreeWidget::item:selected { background-color: #EEF2FF; color: #4F46E5; }
+                """)
         layout.addWidget(self.tree)
 
     def load_data(self, search_text="", type_filter="Все"):
@@ -108,10 +114,16 @@ class CounterpartiesView(QWidget):
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.tree.setAlternatingRowColors(True)
         self.tree.setStyleSheet("""
-            QTreeWidget { border: 1px solid #E2E8F0; border-radius: 8px; background-color: white; font-size: 14px; }
-            QTreeWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; }
-            QTreeWidget::item:selected { background-color: #EEF2FF; color: #4F46E5; }
-        """)
+                    QTreeWidget { 
+                        border: 1px solid #E2E8F0; 
+                        border-radius: 8px; 
+                        background-color: white; 
+                        alternate-background-color: #F8FAFC;
+                        font-size: 14px; 
+                    }
+                    QTreeWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; }
+                    QTreeWidget::item:selected { background-color: #EEF2FF; color: #4F46E5; }
+                """)
         self.tree.itemSelectionChanged.connect(self.update_360_card)
         splitter.addWidget(self.tree)
 

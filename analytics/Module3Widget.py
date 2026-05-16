@@ -4,16 +4,15 @@ from PyQt6.QtWidgets import (
     QPushButton, QScrollArea, QGridLayout, QButtonGroup, QFileDialog, QMessageBox,
     QSizePolicy, QSlider, QComboBox, QSpinBox
 )
-from PyQt6.QtCore import QDate, Qt, pyqtSignal
+from PyQt6.QtCore import *
 from PyQt6.QtGui import QColor, QFont
 
 from analytics.controller import AnalyticsController
-from analytics.charts import create_line_chart, create_pie_chart, create_bar_chart
+from analytics.charts import create_line_chart, create_pie_chart
 from analytics.pdf_generator import PDFReportGenerator
 
 
 class KPICard(QFrame):
-    # ... (код KPICard остается без изменений, он у нас уже идеален)
     def __init__(self, title, icon, value="0 ₽", subtext="", color="#4F46E5"):
         super().__init__()
         self.color = color
@@ -23,7 +22,8 @@ class KPICard(QFrame):
     def setup_ui(self, title, icon, value, subtext):
         self.setMinimumHeight(140)
         self.setStyleSheet(
-            f"#kpi_card {{ background-color: white; border-radius: 12px; border: 1px solid #E2E8F0; }} #kpi_card:hover {{ border: 1px solid {self.color}; }}")
+            f"#kpi_card {{ background-color: white; border-radius: 12px; border: 1px solid #E2E8F0; }} "
+            f"#kpi_card:hover {{ border: 1px solid {self.color}; }}")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         header = QHBoxLayout()
@@ -70,14 +70,13 @@ class KPICard(QFrame):
 
 
 class Module3Widget(QWidget):
-    # === 1. ОБЪЯВЛЯЕМ СИГНАЛ ДЛЯ DRILL-DOWN ===
     drill_down_requested = pyqtSignal(str)
 
     def __init__(self, controller=None):
         super().__init__()
         self.analytics_ctrl = AnalyticsController()
+        self.current_theme = "light"
 
-        # Переменные состояния для симулятора
         self.base_income = 0
         self.base_expense = 0
         self.current_shares = []
@@ -85,6 +84,79 @@ class Module3Widget(QWidget):
         self.setup_ui()
         self.set_quick_period("month")
         self.refresh_all()
+
+    def apply_theme(self, theme: str):
+        """Метод вызывается главным окном при переключении темы."""
+        self.current_theme = theme
+        self.refresh_all()
+
+    def sync_matplotlib_theme(self):
+        """Конфигурирует дефолтные параметры стилей matplotlib перед генерацией графиков."""
+        try:
+            import matplotlib
+            if self.current_theme == "dark":
+                matplotlib.rcParams.update({
+                    'figure.facecolor': '#111827',
+                    'axes.facecolor': '#111827',
+                    'text.color': '#E5E7EB',
+                    'axes.labelcolor': '#E5E7EB',
+                    'xtick.color': '#94A3B8',
+                    'ytick.color': '#94A3B8',
+                    'grid.color': '#334155',
+                    'legend.facecolor': '#182235',
+                    'legend.edgecolor': '#334155',
+                })
+            else:
+                matplotlib.rcParams.update(matplotlib.rcParamsDefault)
+        except ImportError:
+            pass
+
+    def _patch_chart_widget(self, widget):
+        """Глубокое окрашивание внутренних элементов холста Matplotlib FigureCanvas."""
+        if not widget:
+            return
+        if hasattr(widget, 'figure'):
+            try:
+                fig = widget.figure
+                if self.current_theme == "dark":
+                    fig.patch.set_facecolor('#111827')
+                    for ax in fig.axes:
+                        ax.set_facecolor('#111827')
+                        ax.title.set_color('#E5E7EB')
+                        ax.xaxis.label.set_color('#E5E7EB')
+                        ax.yaxis.label.set_color('#E5E7EB')
+                        for spine in ax.spines.values():
+                            spine.set_color('#334155')
+                        ax.tick_params(colors='#94A3B8')
+                        for text in ax.texts:
+                            text.set_color('#E5E7EB')
+                        legend = ax.get_legend()
+                        if legend:
+                            legend.get_frame().set_facecolor('#182235')
+                            legend.get_frame().set_edgecolor('#334155')
+                            for text in legend.get_texts():
+                                text.set_color('#E5E7EB')
+                else:
+                    fig.patch.set_facecolor('#FFFFFF')
+                    for ax in fig.axes:
+                        ax.set_facecolor('#FFFFFF')
+                        ax.title.set_color('#1E293B')
+                        ax.xaxis.label.set_color('#1E293B')
+                        ax.yaxis.label.set_color('#1E293B')
+                        for spine in ax.spines.values():
+                            spine.set_color('#E2E8F0')
+                        ax.tick_params(colors='#475569')
+                        for text in ax.texts:
+                            text.set_color('#1E293B')
+                        legend = ax.get_legend()
+                        if legend:
+                            legend.get_frame().set_facecolor('#FFFFFF')
+                            legend.get_frame().set_edgecolor('#E2E8F0')
+                            for text in legend.get_texts():
+                                text.set_color('#1E293B')
+                widget.draw()
+            except Exception as e:
+                print(f"Ошибка кастомизации графика: {e}")
 
     def setup_ui(self):
         self.scroll = QScrollArea()
@@ -111,13 +183,15 @@ class Module3Widget(QWidget):
         self.btn_excel = QPushButton("📊 P&L Excel")
         self.btn_excel.setFixedSize(140, 40)
         self.btn_excel.setStyleSheet(
-            "QPushButton { background: #10B981; color: white; border-radius: 8px; font-weight: bold; } QPushButton:hover { background: #059669; }")
+            "QPushButton { background: #10B981; color: white; border-radius: 8px; font-weight: bold; } "
+            "QPushButton:hover { background: #059669; }")
         self.btn_excel.clicked.connect(self.export_excel)
 
         self.btn_pdf = QPushButton("📑 Отчет PDF")
         self.btn_pdf.setFixedSize(140, 40)
         self.btn_pdf.setStyleSheet(
-            "QPushButton { background: #0F172A; color: white; border-radius: 8px; font-weight: bold; } QPushButton:hover { background: #1E293B; }")
+            "QPushButton { background: #0F172A; color: white; border-radius: 8px; font-weight: bold; } "
+            "QPushButton:hover { background: #1E293B; }")
         self.btn_pdf.clicked.connect(self.export_pdf)
 
         header.addLayout(title_vbox)
@@ -191,8 +265,8 @@ class Module3Widget(QWidget):
         charts_row1.addWidget(self.pie_container, 1)
         self.main_layout.addLayout(charts_row1)
 
+        # Нейро-сводка
         charts_row2 = QHBoxLayout()
-        self.bar_container = self._create_chart_box("Анализ: План vs Факт (Бюджеты)")
         self.trend_frame = self._create_chart_box("Нейро-сводка")
         self.trend_label = QLabel("Ожидание данных...")
         self.trend_label.setWordWrap(True)
@@ -200,11 +274,10 @@ class Module3Widget(QWidget):
         self.trend_label.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.trend_frame.layout().addWidget(self.trend_label)
         self.trend_frame.layout().addStretch()
-        charts_row2.addWidget(self.bar_container, 2)
         charts_row2.addWidget(self.trend_frame, 1)
         self.main_layout.addLayout(charts_row2)
 
-        # === 5. ПЕРЕРАБОТАННЫЙ КАЛЬКУЛЯТОР "ЧТО-ЕСЛИ" И НАЛОГИ ===
+        # 5. СИМУЛЯТОР И НАЛОГИ
         tools_row = QHBoxLayout()
 
         self.tax_frame = self._create_chart_box("🏦 Налоговый радар")
@@ -218,24 +291,21 @@ class Module3Widget(QWidget):
         wi_layout = QGridLayout()
         wi_layout.setSpacing(15)
 
-        # Селектор категории
         wi_layout.addWidget(QLabel("Моделируемая статья расходов:", styleSheet="color: #64748B;"), 0, 0)
         self.wi_combo = QComboBox()
         self.wi_combo.setStyleSheet("padding: 5px; border: 1px solid #CBD5E1; border-radius: 4px;")
         self.wi_combo.currentIndexChanged.connect(self.calculate_whatif)
         wi_layout.addWidget(self.wi_combo, 0, 1)
 
-        # SpinBox расходов (можно урезать расходы -50%, а можно увеличить цены на сырье +50%)
         wi_layout.addWidget(QLabel("Изменение стоимости статьи:", styleSheet="color: #64748B;"), 1, 0)
         self.wi_exp_spin = QSpinBox()
         self.wi_exp_spin.setRange(-100, 500)
         self.wi_exp_spin.setSuffix(" %")
-        self.wi_exp_spin.setValue(-10)  # По умолчанию имитируем оптимизацию на 10%
+        self.wi_exp_spin.setValue(-10)
         self.wi_exp_spin.setStyleSheet("padding: 5px; border: 1px solid #CBD5E1; border-radius: 4px;")
         self.wi_exp_spin.valueChanged.connect(self.calculate_whatif)
         wi_layout.addWidget(self.wi_exp_spin, 1, 1)
 
-        # Рост доходов
         wi_layout.addWidget(QLabel("Прогноз роста общих доходов:", styleSheet="color: #64748B;"), 2, 0)
         self.wi_inc_spin = QSpinBox()
         self.wi_inc_spin.setRange(-100, 1000)
@@ -245,7 +315,6 @@ class Module3Widget(QWidget):
         self.wi_inc_spin.valueChanged.connect(self.calculate_whatif)
         wi_layout.addWidget(self.wi_inc_spin, 2, 1)
 
-        # Результат
         self.wi_result_profit = QLabel("Прогноз прибыли: 0 ₽")
         self.wi_result_profit.setStyleSheet("font-size: 16px; font-weight: bold; color: #10B981;")
         self.wi_result_margin = QLabel("Прогноз рентабельности: 0%")
@@ -304,12 +373,9 @@ class Module3Widget(QWidget):
         lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         container.layout().addWidget(lbl)
 
-    # === 2. МЕТОД, КОТОРЫЙ ИСПУСКАЕТ СИГНАЛ ПРИ КЛИКЕ НА ПИРОГ ===
     def handle_drill_down(self, category_name):
-        """Передает управление главному окну для переключения вкладки и фильтрации"""
         self.drill_down_requested.emit(category_name)
 
-    # === 3. ЛОГИКА ПРОДВИНУТОГО СИМУЛЯТОРА ===
     def calculate_whatif(self):
         if not self.current_shares or self.base_income == 0:
             return
@@ -321,20 +387,13 @@ class Module3Widget(QWidget):
                 cat_amount = s.amount
                 break
 
-        # Рассчитываем изменения
-        exp_modifier = self.wi_exp_spin.value() / 100.0  # например, -0.1 для -10%
+        exp_modifier = self.wi_exp_spin.value() / 100.0
         inc_modifier = self.wi_inc_spin.value() / 100.0
 
-        # Новая сумма именно этой категории
         new_cat_amount = cat_amount * (1 + exp_modifier)
-
-        # Общий новый расход = Старый расход - Старая сумма категории + Новая сумма категории
         new_total_expense = self.base_expense - cat_amount + new_cat_amount
-
-        # Общий новый доход
         new_total_income = self.base_income * (1 + inc_modifier)
 
-        # Итоги
         new_profit = new_total_income - new_total_expense
         new_margin = (new_profit / new_total_income * 100) if new_total_income > 0 else 0
         profit_diff = new_profit - (self.base_income - self.base_expense)
@@ -347,12 +406,14 @@ class Module3Widget(QWidget):
         self.wi_result_margin.setText(f"Прогноз рентабельности: {new_margin:.1f}%")
 
     def refresh_all(self):
+        # Перед каждым рендером синхронизируем настройки глобальной палитры графиков
+        self.sync_matplotlib_theme()
+
         d_from = self.date_from.date().toPyDate()
         d_to = self.date_to.date().toPyDate()
 
         kpi = self.analytics_ctrl.get_kpi(d_from, d_to)
 
-        # Сохраняем базу для симулятора
         self.base_income = kpi.total_income
         self.base_expense = kpi.total_expense
 
@@ -375,23 +436,22 @@ class Module3Widget(QWidget):
             f"<i>💡 Напоминание:</i> Авансовые платежи уплачиваются до 28 числа."
         )
 
-        for container in [self.line_container, self.pie_container, self.bar_container]:
+        for container in [self.line_container, self.pie_container]:
             for i in reversed(range(1, container.layout().count())):
                 w = container.layout().itemAt(i).widget()
                 if w: w.setParent(None); w.deleteLater()
 
         ts = self.analytics_ctrl.get_time_series(d_from, d_to)
         if ts and any(p.income > 0 or p.expense > 0 for p in ts):
-            self.line_container.layout().addWidget(
-                create_line_chart("", [p.period_label for p in ts], [p.income for p in ts], [p.expense for p in ts],
-                                  [p.profit for p in ts]))
+            chart_line = create_line_chart("", [p.period_label for p in ts], [p.income for p in ts], [p.expense for p in ts], [p.profit for p in ts])
+            self.line_container.layout().addWidget(chart_line)
+            self._patch_chart_widget(chart_line) # Перекрашиваем холст
         else:
             self._add_empty_label(self.line_container)
 
         shares = self.analytics_ctrl.get_category_shares(d_from, d_to, "expense")
         self.current_shares = shares
 
-        # Обновляем комбобокс в симуляторе
         self.wi_combo.blockSignals(True)
         self.wi_combo.clear()
         if shares:
@@ -400,24 +460,14 @@ class Module3Widget(QWidget):
             self.wi_combo.setCurrentIndex(0)
             self.calculate_whatif()
 
-            self.pie_container.layout().addWidget(create_pie_chart(
-                "", [s.category_name for s in shares], [s.amount for s in shares],
-                on_click_callback=self.handle_drill_down
-            ))
+            chart_pie = create_pie_chart("", [s.category_name for s in shares], [s.amount for s in shares], on_click_callback=self.handle_drill_down)
+            self.pie_container.layout().addWidget(chart_pie)
+            self._patch_chart_widget(chart_pie) # Перекрашиваем холст
         else:
             self.wi_combo.addItem("Нет данных")
             self._add_empty_label(self.pie_container, "Нет данных о расходах")
 
         self.wi_combo.blockSignals(False)
-
-        budget_data = self.analytics_ctrl.get_budget_comparison(d_from, d_to)
-        if budget_data:
-            cats = [b['category_name'] for b in budget_data]
-            planned = [float(b['planned']) for b in budget_data]
-            actual = [float(b['actual']) for b in budget_data]
-            self.bar_container.layout().addWidget(create_bar_chart("", cats, planned, actual))
-        else:
-            self._add_empty_label(self.bar_container, "Нет бюджетов для сравнения")
 
         trends = self.analytics_ctrl.get_trends()
         trend_text = f"<b>🔮 AI Прогноз расходов:</b> {trends.forecast_next_period:,.0f} ₽<br><br>"
@@ -436,8 +486,7 @@ class Module3Widget(QWidget):
     def export_excel(self):
         d_from = self.date_from.date().toPyDate()
         d_to = self.date_to.date().toPyDate()
-        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить P&L отчет", f"PNL_{d_from}_{d_to}.xlsx",
-                                                   "Excel Files (*.xlsx)")
+        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить P&L отчет", f"PNL_{d_from}_{d_to}.xlsx", "Excel Files (*.xlsx)")
         if not file_path: return
         try:
             self.analytics_ctrl.service.export_pl_excel(d_from, d_to, file_path)
@@ -448,8 +497,7 @@ class Module3Widget(QWidget):
     def export_pdf(self):
         d_from = self.date_from.date().toPyDate()
         d_to = self.date_to.date().toPyDate()
-        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить PDF-отчет", f"Аналитика_{d_from}_по_{d_to}.pdf",
-                                                   "PDF Files (*.pdf)")
+        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить PDF-отчет", f"Аналитика_{d_from}_по_{d_to}.pdf", "PDF Files (*.pdf)")
         if not file_path: return
         try:
             kpi = self.analytics_ctrl.get_kpi(d_from, d_to)

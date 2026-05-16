@@ -33,9 +33,10 @@ class ReferencesRepository:
     def create_category(self, cat: Category) -> int:
         cur = self.conn.cursor()
         try:
+            parent_id = cat.parent_id if cat.parent_id else None
             cur.execute(
                 "INSERT INTO categories (name, type, parent_id, monthly_limit) VALUES (%s,%s,%s,%s)",
-                (cat.name, cat.type.value, cat.parent_id, cat.monthly_limit)
+                (cat.name, cat.type.value, parent_id, cat.monthly_limit)
             )
             return cur.lastrowid
         finally:
@@ -44,20 +45,57 @@ class ReferencesRepository:
     def update_category(self, cat: Category):
         cur = self.conn.cursor()
         try:
+            parent_id = cat.parent_id if cat.parent_id else None
             cur.execute(
                 "UPDATE categories SET name=%s, type=%s, parent_id=%s, monthly_limit=%s WHERE id=%s",
-                (cat.name, cat.type.value, cat.parent_id, cat.monthly_limit, cat.id)
+                (cat.name, cat.type.value, parent_id, cat.monthly_limit, cat.id)
             )
         finally:
             cur.close()
 
     def delete_category(self, cat_id: int) -> bool:
         cur = self.conn.cursor()
+
         try:
-            cur.execute("SELECT COUNT(*) as cnt FROM transaction_items WHERE category_id=%s", (cat_id,))
-            if cur.fetchone()["cnt"] > 0: return False
-            cur.execute("DELETE FROM categories WHERE id=%s", (cat_id,))
+            # Проверяем использование
+            cur.execute(
+                "SELECT COUNT(*) as cnt FROM transaction_items WHERE category_id=%s",
+                (cat_id,)
+            )
+
+            if cur.fetchone()["cnt"] > 0:
+                raise ValueError(
+                    "Нельзя удалить категорию: она используется в операциях"
+                )
+
+            # Сначала отвязываем детей
+            cur.execute(
+                "UPDATE categories SET parent_id=NULL WHERE parent_id=%s",
+                (cat_id,)
+            )
+
+            # Потом удаляем
+            cur.execute(
+                "DELETE FROM categories WHERE id=%s",
+                (cat_id,)
+            )
+
             return True
+
+        finally:
+            cur.close()
+
+    def is_category_used(self, cat_id: int) -> bool:
+        cur = self.conn.cursor()
+        try:
+            cur.execute(
+                "SELECT COUNT(*) as cnt FROM transaction_items WHERE category_id=%s",
+                (cat_id,)
+            )
+            result = cur.fetchone()
+
+            return result["cnt"] > 0
+
         finally:
             cur.close()
 

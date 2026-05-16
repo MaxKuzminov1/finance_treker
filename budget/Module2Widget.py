@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QFrame, QTabWidget, QHeaderView,
     QDateEdit, QMessageBox, QDialog
 )
-from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtCore import Qt, QDate, QTimer
 from PyQt6.QtGui import QColor
 
 import calendar
@@ -22,6 +22,7 @@ class Module2Widget(QWidget):
         self.budget_counts = []
         self.budget_cat_ids = []
         self.categories = []
+        self.current_theme = "light"  # Отслеживаем текущую тему
 
         # Секретный период для хранения шаблона "По умолчанию"
         self.TEMPLATE_START = '1999-01-01'
@@ -32,6 +33,71 @@ class Module2Widget(QWidget):
         self.init_ui()
         self.load_categories()
         self.load_budgets()
+
+    def apply_theme(self, theme: str):
+        """Метод вызывается главным окном при переключении темы."""
+        self.current_theme = theme
+        self.refresh_all()
+
+    def sync_matplotlib_theme(self):
+        """Конфигурирует дефолтные параметры стилей matplotlib перед генерацией графиков."""
+        try:
+            import matplotlib
+            if self.current_theme == "dark":
+                matplotlib.rcParams.update({
+                    'figure.facecolor': '#111827',
+                    'axes.facecolor': '#111827',
+                    'text.color': '#E5E7EB',
+                    'axes.labelcolor': '#E5E7EB',
+                    'xtick.color': '#94A3B8',
+                    'ytick.color': '#94A3B8',
+                    'grid.color': '#334155',
+                    'legend.facecolor': '#182235',
+                    'legend.edgecolor': '#334155',
+                })
+            else:
+                matplotlib.rcParams.update(matplotlib.rcParamsDefault)
+        except ImportError:
+            pass
+
+    def patch_all_charts(self):
+        """Находит все графики внутри вкладки План/Факт и перекрашивает их."""
+        for widget in self.plan_fact_tab.findChildren(QWidget):
+            if hasattr(widget, 'figure'):
+                self._patch_chart_widget(widget)
+
+    def _patch_chart_widget(self, widget):
+        """Глубокое окрашивание внутренних элементов холста Matplotlib."""
+        if not widget or not hasattr(widget, 'figure'):
+            return
+        try:
+            fig = widget.figure
+            is_dark = self.current_theme == "dark"
+            bg_color = '#111827' if is_dark else '#FFFFFF'
+            text_color = '#E5E7EB' if is_dark else '#1E293B'
+            grid_color = '#334155' if is_dark else '#E2E8F0'
+            tick_color = '#94A3B8' if is_dark else '#475569'
+
+            fig.patch.set_facecolor(bg_color)
+            for ax in fig.axes:
+                ax.set_facecolor(bg_color)
+                ax.title.set_color(text_color)
+                ax.xaxis.label.set_color(text_color)
+                ax.yaxis.label.set_color(text_color)
+                for spine in ax.spines.values():
+                    spine.set_color(grid_color)
+                ax.tick_params(colors=tick_color)
+                for text in ax.texts:
+                    text.set_color(text_color)
+                legend = ax.get_legend()
+                if legend:
+                    legend.get_frame().set_facecolor('#182235' if is_dark else '#FFFFFF')
+                    legend.get_frame().set_edgecolor(grid_color)
+                    for text in legend.get_texts():
+                        text.set_color(text_color)
+            widget.draw()
+        except Exception as e:
+            print(f"Ошибка кастомизации графика в Модуле 2: {e}")
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -90,7 +156,7 @@ class Module2Widget(QWidget):
 
         filter_layout.addWidget(self.dynamic_filters)
 
-        # ВИЗУАЛЬНАЯ ПОДСКАЗКА (Опция 2)
+        # ВИЗУАЛЬНАЯ ПОДСКАЗКА
         self.period_hint_lbl = QLabel("")
         self.period_hint_lbl.setStyleSheet("color: #D97706; font-size: 12px; font-weight: bold;")
         filter_layout.addWidget(self.period_hint_lbl)
@@ -111,7 +177,7 @@ class Module2Widget(QWidget):
         self.tab_widget = QTabWidget()
         self.tab_widget.setStyleSheet("""
             QTabWidget::pane { background: transparent; border: none; }
-            QTabBar::tab { background: #E2E8F0; color: #64748B; padding: 10px 24px; margin-right: 4px; border-radius: 8px 8px 0 0; font-weight: bold; }
+            QTabBar::tab { background: #F1F5F9; color: #64748B; padding: 10px 24px; margin-right: 4px; border-radius: 8px 8px 0 0; font-weight: bold; }
             QTabBar::tab:selected { background: white; color: #4F46E5; border-bottom: 3px solid #4F46E5; }
         """)
 
@@ -168,8 +234,25 @@ class Module2Widget(QWidget):
         self.budget_table.setColumnCount(4)
         self.budget_table.setHorizontalHeaderLabels(["Категория", "Тип", "Плановая сумма (₽)", "Действия"])
         self.budget_table.setStyleSheet("""
-            QTableWidget { background: white; border: 1px solid #E2E8F0; border-radius: 12px; gridline-color: #F1F5F9; }
-            QHeaderView::section { background: #F8FAFC; padding: 12px; border: none; border-bottom: 2px solid #E2E8F0; font-weight: bold; color: #475569; }
+            QTableWidget { 
+                background: white; 
+                alternate-background-color: #F8FAFC;
+                border: 1px solid #E2E8F0; 
+                border-radius: 12px; 
+                gridline-color: #F1F5F9; 
+            }
+            QTableWidget::item:selected {
+                background-color: #EEF2FF;
+                color: #4F46E5;
+            }
+            QHeaderView::section { 
+                background: #F8FAFC; 
+                padding: 12px; 
+                border: none; 
+                border-bottom: 2px solid #E2E8F0; 
+                font-weight: bold; 
+                color: #475569; 
+            }
             QTableWidget::item { padding: 8px; }
         """)
         self.budget_table.setAlternatingRowColors(True)
@@ -188,7 +271,6 @@ class Module2Widget(QWidget):
 
     def _transfer_budgets(self, source_start, source_end, target_start, target_end):
         try:
-            # Умный перенос: берем агрегированную сумму из источника
             source_budgets = self.controller.execute("""
                 SELECT category_id, SUM(planned_amount) 
                 FROM budgets 
@@ -285,6 +367,7 @@ class Module2Widget(QWidget):
             self.month_combo.addItems(
                 ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь",
                  "Ноябрь", "Декабрь"])
+            self.month_combo.setCurrentIndex(QDate.currentDate().month() - 1)
             self.month_combo.setStyleSheet(combo_style)
             self.dynamic_layout.addWidget(self.month_combo)
             self.dynamic_layout.addWidget(self.year_combo)
@@ -349,7 +432,6 @@ class Module2Widget(QWidget):
     def load_budgets(self):
         try:
             dates = self.get_period_dates()
-            # НОВЫЙ SQL: Суммирует все бюджеты, которые входят в выбранный период
             rows = self.controller.execute("""
                 SELECT 
                     MIN(b.id), c.id, c.name, c.type, SUM(b.planned_amount), COUNT(b.id)
@@ -363,6 +445,16 @@ class Module2Widget(QWidget):
             self.budget_ids = []
             self.budget_counts = []
             self.budget_cat_ids = []
+
+            # Цвета кнопок зависят от текущей темы
+            is_dark = self.current_theme == "dark"
+
+            edit_bg = "#334155" if is_dark else "#F1F5F9"
+            edit_hover = "#475569" if is_dark else "#E2E8F0"
+
+            del_bg = "#7F1D1D" if is_dark else "#FEE2E2"
+            del_color = "#FCA5A5" if is_dark else "#EF4444"
+            del_hover = "#991B1B" if is_dark else "#FECACA"
 
             for i, (bid, cat_id, cat_name, cat_type, plan, count) in enumerate(rows):
                 self.budget_ids.append(bid)
@@ -391,21 +483,20 @@ class Module2Widget(QWidget):
                 edit_btn = QPushButton("✏️")
                 edit_btn.setFixedSize(30, 30)
 
-                # Если сумма состоит из нескольких месяцев, блокируем простое редактирование
                 if count > 1:
                     edit_btn.setDisabled(True)
                     edit_btn.setToolTip("Составной бюджет. Для редактирования переключитесь на период 'Месяц'.")
                     edit_btn.setStyleSheet(
-                        "QPushButton { background: #F1F5F9; border-radius: 6px; color: transparent; }")
+                        f"QPushButton {{ background: {edit_bg}; border-radius: 6px; color: transparent; }}")
                 else:
                     edit_btn.setStyleSheet(
-                        "QPushButton { background: #F1F5F9; border-radius: 6px; } QPushButton:hover { background: #E2E8F0; }")
+                        f"QPushButton {{ background: {edit_bg}; border-radius: 6px; }} QPushButton:hover {{ background: {edit_hover}; }}")
                     edit_btn.clicked.connect(lambda checked, r=i: self.edit_budget(r))
 
                 delete_btn = QPushButton("🗑")
                 delete_btn.setFixedSize(30, 30)
                 delete_btn.setStyleSheet(
-                    "QPushButton { background: #FEE2E2; color: #EF4444; border-radius: 6px; } QPushButton:hover { background: #FECACA; }")
+                    f"QPushButton {{ background: {del_bg}; color: {del_color}; border-radius: 6px; }} QPushButton:hover {{ background: {del_hover}; }}")
                 delete_btn.clicked.connect(lambda checked, r=i: self.delete_budget(r))
 
                 btn_layout.addWidget(edit_btn)
@@ -423,7 +514,6 @@ class Module2Widget(QWidget):
             try:
                 dates = self.get_period_dates()
 
-                # ЛОГИКА УМНОГО РАСПРЕДЕЛЕНИЯ (Опция 3)
                 if dialog.allocation_method == 'divide':
                     year = int(self.year_combo.currentText())
                     if period_type == "Год":
@@ -451,7 +541,6 @@ class Module2Widget(QWidget):
 
                     QMessageBox.information(self, "Успех", f"Сумма разбита на {added} мес. (по {div_amount:,.2f} ₽)")
                 else:
-                    # Стандартное добавление
                     existing = self.controller.execute(
                         "SELECT id FROM budgets WHERE category_id = %s AND period_start = %s AND period_end = %s",
                         (dialog.category_id, dates['start'], dates['end']), fetch=True)
@@ -487,7 +576,6 @@ class Module2Widget(QWidget):
 
         if QMessageBox.question(self, "Удаление", msg) == QMessageBox.StandardButton.Yes:
             dates = self.get_period_dates()
-            # Умное удаление: сносим всё, что входит в текущий фильтр
             self.controller.execute("""
                 DELETE FROM budgets 
                 WHERE category_id = %s AND period_start >= %s AND period_end <= %s
@@ -495,5 +583,9 @@ class Module2Widget(QWidget):
             self.refresh_all()
 
     def refresh_all(self):
+        self.sync_matplotlib_theme()
         self.load_budgets()
         self.plan_fact_tab.load_data(self.get_period_dates())
+
+        # Небольшая задержка, чтобы Matplotlib успел нарисовать графики перед окрашиванием
+        QTimer.singleShot(100, self.patch_all_charts)

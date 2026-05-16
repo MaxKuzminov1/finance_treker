@@ -19,8 +19,15 @@ class Module1Widget(QWidget):
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
-        self.setStyleSheet("background-color: #F8FAFC;")
+        self.current_theme = "light"
+        # ИСПРАВЛЕНИЕ: Убрали жестко заданный белый фон, чтобы окно было прозрачным
+        # и наследовало правильный тёмный или светлый фон от main_view.
         self.init_ui()
+
+    def apply_theme(self, theme: str):
+        """Перехват смены темы для динамического обновления цветов"""
+        self.current_theme = theme
+        self.refresh()
 
     def init_ui(self):
         # Основной layout
@@ -230,69 +237,33 @@ class Module1Widget(QWidget):
         """
 
         self.add_btn.setStyleSheet(button_style + """
-            QPushButton {
-                background-color: #4F46E5;
-                color: white;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #6366F1;
-            }
+            QPushButton { background-color: #4F46E5; color: white; border: none; }
+            QPushButton:hover { background-color: #6366F1; }
         """)
 
         self.edit_btn.setStyleSheet(button_style + """
-            QPushButton {
-                background-color: #F59E0B;
-                color: white;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #D97706;
-            }
+            QPushButton { background-color: #F59E0B; color: white; border: none; }
+            QPushButton:hover { background-color: #D97706; }
         """)
 
         self.delete_btn.setStyleSheet(button_style + """
-            QPushButton {
-                background-color: #EF4444;
-                color: white;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #DC2626;
-            }
+            QPushButton { background-color: #EF4444; color: white; border: none; }
+            QPushButton:hover { background-color: #DC2626; }
         """)
 
         self.reset_btn.setStyleSheet(button_style + """
-            QPushButton {
-                background-color: #64748B;
-                color: white;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #475569;
-            }
+            QPushButton { background-color: #64748B; color: white; border: none; }
+            QPushButton:hover { background-color: #475569; }
         """)
 
         export_btn.setStyleSheet(button_style + """
-            QPushButton {
-                background-color: #10B981;
-                color: white;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #059669;
-            }
+            QPushButton { background-color: #10B981; color: white; border: none; }
+            QPushButton:hover { background-color: #059669; }
         """)
 
         import_btn.setStyleSheet(button_style + """
-            QPushButton {
-                background-color: #8B5CF6;
-                color: white;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #7C3AED;
-            }
+            QPushButton { background-color: #8B5CF6; color: white; border: none; }
+            QPushButton:hover { background-color: #7C3AED; }
         """)
 
         buttons_row.addWidget(self.add_btn)
@@ -356,13 +327,13 @@ class Module1Widget(QWidget):
         self.table.setStyleSheet("""
             QTableWidget {
                 background: white;
+                alternate-background-color: #F8FAFC;
                 border: 1px solid #E2E8F0;
                 border-radius: 8px;
                 gridline-color: #F1F5F9;
             }
-            QTableWidget::item {
-                padding: 10px;
-            }
+            QTableWidget::item { padding: 10px; }
+            QTableWidget::item:selected { background-color: #EEF2FF; color: #4F46E5; }
             QHeaderView::section {
                 background: #F8FAFC;
                 padding: 12px;
@@ -385,7 +356,6 @@ class Module1Widget(QWidget):
         self.table.setColumnWidth(7, 100)  # Остаток
         self.table.setColumnWidth(8, 100)  # Статус
 
-        # НАСТРОЙКА СТРОК (Увеличение высоты строк и скрытие служебного левого столбца)
         self.table.verticalHeader().setDefaultSectionSize(45)
         self.table.verticalHeader().setVisible(False)
 
@@ -408,14 +378,16 @@ class Module1Widget(QWidget):
         export_btn.clicked.connect(self.export_data)
         import_btn.clicked.connect(self.import_data)
 
-        # Загружаем категории
         self.load_categories_for_filter()
-
-        # Первичная автоматическая загрузка данных при запуске
         self.refresh()
 
+    def filter_by_category(self, category_name: str):
+        """Метод для внешнего вызова (Drill-down из аналитики)"""
+        index = self.category_filter.findText(category_name)
+        if index >= 0:
+            self.category_filter.setCurrentIndex(index)
+
     def load_categories_for_filter(self):
-        """Загрузка категорий для фильтра"""
         try:
             categories = self.controller.get_categories()
             current_text = self.category_filter.currentText()
@@ -443,18 +415,10 @@ class Module1Widget(QWidget):
 
     def export_data(self):
         try:
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Экспорт данных",
-                "",
-                "Excel (*.xlsx);;CSV (*.csv)"
-            )
-
-            if not file_path:
-                return
+            file_path, _ = QFileDialog.getSaveFileName(self, "Экспорт данных", "", "Excel (*.xlsx);;CSV (*.csv)")
+            if not file_path: return
 
             data = self.controller.get_all()
-
             rows = []
             for t in data:
                 cats = t.get("categories", [])
@@ -474,18 +438,12 @@ class Module1Widget(QWidget):
                 })
 
             df = pd.DataFrame(rows)
-
             if file_path.endswith(".csv"):
                 df.to_csv(file_path, index=False, encoding="utf-8-sig")
             else:
                 df.to_excel(file_path, index=False)
 
-            QMessageBox.information(
-                self,
-                "Экспорт завершён",
-                f"✅ Данные успешно сохранены:\n{file_path}"
-            )
-
+            QMessageBox.information(self, "Экспорт завершён", f"✅ Данные успешно сохранены:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Ошибка экспорта", str(e))
 
@@ -496,12 +454,7 @@ class Module1Widget(QWidget):
         t_filter = self.type_filter.currentText()
         category_filter = self.category_filter.currentText()
 
-        type_map = {
-            "Все": None,
-            "💰 Доход": "income",
-            "💸 Расход": "expense"
-        }
-
+        type_map = {"Все": None, "💰 Доход": "income", "💸 Расход": "expense"}
         db_filter = type_map.get(t_filter)
 
         date_from = self.date_from.date().toPyDate()
@@ -510,16 +463,10 @@ class Module1Widget(QWidget):
         filtered = []
 
         for t in data:
-            # SEARCH
             comment = str(t.get("comment", "")).lower()
-            if search_text and search_text not in comment:
-                continue
+            if search_text and search_text not in comment: continue
+            if db_filter and t.get("type") != db_filter: continue
 
-            # TYPE
-            if db_filter and t.get("type") != db_filter:
-                continue
-
-            # CATEGORY (Исправлено разбиение строк из GROUP_CONCAT)
             cats = t.get("categories", [])
             cat_names = []
             if isinstance(cats, list):
@@ -531,11 +478,9 @@ class Module1Widget(QWidget):
             elif isinstance(cats, str):
                 cat_names = [c.strip() for c in cats.split(',')]
 
-            if category_filter != "Все категории":
-                if category_filter not in cat_names:
-                    continue
+            if category_filter != "Все категории" and category_filter not in cat_names:
+                continue
 
-            # DATE (Исправлено распознавание объектов datetime.date)
             raw_date = t.get("date")
             try:
                 if isinstance(raw_date, datetime):
@@ -549,74 +494,77 @@ class Module1Widget(QWidget):
             except:
                 continue
 
-            if trans_date < date_from or trans_date > date_to:
-                continue
+            if trans_date < date_from or trans_date > date_to: continue
 
             filtered.append(t)
 
         self.table.setRowCount(len(filtered))
 
-        type_colors = {
-            "income": QColor("#10B981"),
-            "expense": QColor("#EF4444")
-        }
+        type_colors = {"income": QColor("#10B981"), "expense": QColor("#EF4444")}
+        type_icons = {"income": "💰", "expense": "💸"}
 
-        type_icons = {
-            "income": "💰",
-            "expense": "💸"
-        }
+        # Динамический цвет текста для записей таблицы
+        base_text_color = QColor("#E5E7EB") if getattr(self, "current_theme", "light") == "dark" else QColor("#475569")
 
         for i, t in enumerate(filtered):
             # ID
-            self.table.setItem(i, 0, QTableWidgetItem(str(t.get("id", ""))))
+            item_id = QTableWidgetItem(str(t.get("id", "")))
+            item_id.setForeground(base_text_color)
+            self.table.setItem(i, 0, item_id)
 
-            # ДАТА (Исправлено форматирование)
+            # ДАТА
             date_value = t.get("date", "")
             if isinstance(date_value, (datetime, date)):
                 date_str = date_value.strftime("%d.%m.%Y")
             elif isinstance(date_value, str):
-                if len(date_value) >= 10:
-                    date_str = f"{date_value[8:10]}.{date_value[5:7]}.{date_value[0:4]}"
-                else:
-                    date_str = date_value
+                date_str = f"{date_value[8:10]}.{date_value[5:7]}.{date_value[0:4]}" if len(
+                    date_value) >= 10 else date_value
             else:
                 date_str = str(date_value)
-            self.table.setItem(i, 1, QTableWidgetItem(date_str))
+
+            item_date = QTableWidgetItem(date_str)
+            item_date.setForeground(base_text_color)
+            self.table.setItem(i, 1, item_date)
 
             # Тип
             t_type = t.get("type", "")
             type_item = QTableWidgetItem(f"{type_icons.get(t_type, '')} {'Доход' if t_type == 'income' else 'Расход'}")
-            type_item.setForeground(type_colors.get(t_type, QColor("#475569")))
+            type_item.setForeground(type_colors.get(t_type, base_text_color))
             self.table.setItem(i, 2, type_item)
 
             # Сумма
             amount = t.get("total_amount", 0)
             amount_item = QTableWidgetItem(f"{amount:,.2f} ₽")
             amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            amount_item.setForeground(base_text_color)
+            font = amount_item.font()
+            font.setBold(True)
+            amount_item.setFont(font)
             self.table.setItem(i, 3, amount_item)
 
-            # Категории (Исправлен вывод объединенной строки)
+            # Категории
             cats_display = t.get("categories", "")
-            if isinstance(cats_display, list):
-                names = [str(c.get("name", "")) for c in cats_display if isinstance(c, dict)]
-                cats_str = ", ".join(names)
-            else:
-                cats_str = str(cats_display) if cats_display else "Без категории"
-            self.table.setItem(i, 4, QTableWidgetItem(cats_str))
+            cats_str = ", ".join([str(c.get("name", "")) for c in cats_display if isinstance(c, dict)]) if isinstance(
+                cats_display, list) else (str(cats_display) if cats_display else "Без категории")
+            item_cat = QTableWidgetItem(cats_str)
+            item_cat.setForeground(base_text_color)
+            self.table.setItem(i, 4, item_cat)
 
             # Комментарий
-            self.table.setItem(i, 5, QTableWidgetItem(str(t.get("comment", ""))))
+            item_com = QTableWidgetItem(str(t.get("comment", "")))
+            item_com.setForeground(base_text_color)
+            self.table.setItem(i, 5, item_com)
 
             # Оплачено
-            paid = t.get('paid', 0)
-            paid_item = QTableWidgetItem(f"{paid:,.2f} ₽")
+            paid_item = QTableWidgetItem(f"{t.get('paid', 0):,.2f} ₽")
             paid_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            paid_item.setForeground(base_text_color)
             self.table.setItem(i, 6, paid_item)
 
             # Остаток
-            remaining = t.get('remaining', 0)
-            remaining_item = QTableWidgetItem(f"{remaining:,.2f} ₽")
+            remaining_item = QTableWidgetItem(f"{t.get('remaining', 0):,.2f} ₽")
             remaining_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            remaining_item.setForeground(base_text_color)
             self.table.setItem(i, 7, remaining_item)
 
             # Статус
@@ -643,9 +591,8 @@ class Module1Widget(QWidget):
 
     def edit(self):
         row = self.table.currentRow()
-        if row < 0:
-            QMessageBox.warning(self, "Предупреждение", "Пожалуйста, выберите операцию для редактирования")
-            return
+        if row < 0: return QMessageBox.warning(self, "Предупреждение",
+                                               "Пожалуйста, выберите операцию для редактирования")
 
         try:
             tid = int(self.table.item(row, 0).text())
@@ -658,21 +605,14 @@ class Module1Widget(QWidget):
 
     def delete(self):
         row = self.table.currentRow()
-        if row < 0:
-            QMessageBox.warning(self, "Предупреждение", "Пожалуйста, выберите операцию для удаления")
-            return
+        if row < 0: return QMessageBox.warning(self, "Предупреждение", "Пожалуйста, выберите операцию для удаления")
 
         tid = int(self.table.item(row, 0).text())
-
-        reply = QMessageBox.question(self, "Подтверждение",
-                                     f"Вы действительно хотите удалить операцию #{tid}?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-
-        if reply == QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(self, "Подтверждение", f"Удалить операцию #{tid}?",
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             self.controller.delete(tid)
             self.load_categories_for_filter()
             self.refresh()
-            QMessageBox.information(self, "Успех", "Операция успешно удалена!")
 
     def import_data(self):
         file_path, _ = QFileDialog.getOpenFileName(

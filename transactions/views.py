@@ -64,6 +64,14 @@ class CategoryForm(QDialog):
         if not name: return QMessageBox.warning(self, "Ошибка", "Введите название")
         cat_type = CategoryType.INCOME if self.type_combo.currentIndex() == 0 else CategoryType.EXPENSE
         parent_id = self.parent_combo.currentData()
+
+        # ЖЁСТКАЯ НОРМАЛИЗАЦИЯ
+        if parent_id in (0, "0", "", False):
+            parent_id = None
+
+        # Защита от self-parent
+        if self.cat_data and parent_id == self.cat_data.id:
+            parent_id = None
         limit = self.limit_spin.value()
 
         try:

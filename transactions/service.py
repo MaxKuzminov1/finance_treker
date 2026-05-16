@@ -10,6 +10,10 @@ class ReferencesService:
     # ---------- Категории ----------
     def get_category_tree(self):
         all_cats = self.repo.get_all_categories()
+
+        # ОЧИЩАЕМ CHILDREN
+        for c in all_cats:
+            c.children = []
         cat_map = {c.id: c for c in all_cats}
         roots = []
         for c in all_cats:
@@ -24,17 +28,27 @@ class ReferencesService:
     def validate_category(self, cat: Category):
         if not cat.name.strip():
             raise ValueError("Название категории обязательно")
-        if cat.parent_id == cat.id:
+        if cat.id is not None and cat.parent_id == cat.id:
             raise ValueError("Категория не может быть родителем сама себе")
 
     def create_category(self, cat: Category):
+        # Если выбрано "Нет" → делаем категорию корневой
+        if not cat.parent_id:
+            cat.parent_id = None
+
         self.validate_category(cat)
+
         new_id = self.repo.create_category(cat)
         self.repo.log_action("category", new_id, "create")
         return new_id
 
     def update_category(self, cat: Category):
+        # Если выбрано "Нет" → убираем родителя
+        if not cat.parent_id:
+            cat.parent_id = None
+
         self.validate_category(cat)
+
         self.repo.update_category(cat)
         self.repo.log_action("category", cat.id, "update")
 
