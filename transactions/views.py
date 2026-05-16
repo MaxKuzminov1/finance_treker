@@ -14,6 +14,32 @@ class CategoryForm(QDialog):
         self.setup_ui()
 
     def setup_ui(self):
+        # Добавлены базовые стили с явным указанием цветов для корректной инверсии
+        self.setStyleSheet("""
+            QDialog { background-color: #F8FAFC; color: #1E293B; }
+            QLabel { color: #1E293B; font-weight: bold; }
+            QLineEdit, QComboBox, QDoubleSpinBox {
+                background-color: white;
+                color: #1E293B;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #1E293B;
+            }
+            QPushButton {
+                background-color: white;
+                color: #1E293B;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                padding: 6px 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #F1F5F9; }
+        """)
+
         layout = QVBoxLayout(self)
 
         layout.addWidget(QLabel("Название:"))
@@ -33,7 +59,6 @@ class CategoryForm(QDialog):
                 self.parent_combo.addItem(cat.name, cat.id)
         layout.addWidget(self.parent_combo)
 
-        # НОВОЕ: Лимит
         layout.addWidget(QLabel("Месячный бюджет (лимит):"))
         self.limit_spin = QDoubleSpinBox()
         self.limit_spin.setMaximum(1000000000)
@@ -51,9 +76,12 @@ class CategoryForm(QDialog):
 
         btn_layout = QHBoxLayout()
         save_btn = QPushButton("✓ Сохранить")
+        save_btn.setStyleSheet("background-color: #10B981; color: white; border: none;")
         save_btn.clicked.connect(self.save)
+
         cancel_btn = QPushButton("✗ Отмена")
         cancel_btn.clicked.connect(self.reject)
+
         btn_layout.addStretch()
         btn_layout.addWidget(save_btn)
         btn_layout.addWidget(cancel_btn)
@@ -65,11 +93,9 @@ class CategoryForm(QDialog):
         cat_type = CategoryType.INCOME if self.type_combo.currentIndex() == 0 else CategoryType.EXPENSE
         parent_id = self.parent_combo.currentData()
 
-        # ЖЁСТКАЯ НОРМАЛИЗАЦИЯ
         if parent_id in (0, "0", "", False):
             parent_id = None
 
-        # Защита от self-parent
         if self.cat_data and parent_id == self.cat_data.id:
             parent_id = None
         limit = self.limit_spin.value()
@@ -95,6 +121,23 @@ class CounterpartyForm(QDialog):
         self.setup_ui()
 
     def setup_ui(self):
+        # Базовые стили для формы контрагента
+        self.setStyleSheet("""
+            QDialog { background-color: #F8FAFC; color: #1E293B; }
+            QLabel { color: #1E293B; font-weight: bold; }
+            QLineEdit, QComboBox {
+                background-color: white;
+                color: #1E293B;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #1E293B;
+            }
+        """)
+
         layout = QFormLayout(self)
         self.name_edit = QLineEdit()
         self.type_combo = QComboBox()
@@ -166,6 +209,18 @@ class MergeCategoryDialog(QDialog):
         self.setup_ui()
 
     def setup_ui(self):
+        self.setStyleSheet("""
+            QDialog { background-color: #F8FAFC; color: #1E293B; }
+            QLabel { color: #1E293B; font-weight: bold; }
+            QComboBox {
+                background-color: white;
+                color: #1E293B;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                padding: 6px;
+            }
+        """)
+
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Внимание! Старая категория будет удалена,\nа все её операции перенесены в новую.",
                                 styleSheet="color: #EF4444;"))

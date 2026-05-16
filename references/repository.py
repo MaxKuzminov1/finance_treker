@@ -213,7 +213,8 @@ class Repository:
         cur = None
         try:
             cur = self.conn.cursor()
-            cur.execute("SELECT id, name FROM categories ORDER BY name")
+            # ИСПРАВЛЕНИЕ: Добавили выборку parent_id, чтобы строить иерархию подкатегорий
+            cur.execute("SELECT id, name, parent_id FROM categories ORDER BY name")
             return cur.fetchall()
         except Exception as e:
             print(f"Ошибка при получении категорий: {e}")

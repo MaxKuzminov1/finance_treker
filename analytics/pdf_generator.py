@@ -45,6 +45,17 @@ class PDFReportGenerator:
             Spacer(1, 20)
         ]
 
+        # ИСПРАВЛЕНИЕ: Выносим общий стиль для обеих таблиц в отдельную переменную
+        common_table_style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
+            ('FONTNAME', (0, 0), (-1, -1), self.font_name),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('FONTWEIGHT', (0, 0), (-1, 0), 'BOLD'),
+            ('PADDING', (0, 0), (-1, -1), 8),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT')
+        ])
+
         # 1. Таблица KPI
         elements.append(Paragraph("Ключевые финансовые показатели", h2_style))
         kpi_data = [
@@ -57,15 +68,8 @@ class PDFReportGenerator:
         ]
 
         t_kpi = Table(kpi_data, colWidths=[250, 150])
-        t_kpi.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
-            ('FONTNAME', (0, 0), (-1, -1), self.font_name),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-            ('FONTWEIGHT', (0, 0), (-1, 0), 'BOLD'),
-            ('PADDING', (0, 0), (-1, -1), 8),
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT')
-        ]))
+        # Применяем вынесенный стиль
+        t_kpi.setStyle(common_table_style)
         elements.append(t_kpi)
         elements.append(Spacer(1, 15))
 
@@ -77,7 +81,8 @@ class PDFReportGenerator:
                 shares_data.append([s.category_name, f"{s.amount:,.2f} руб.", f"{s.percentage:.1f}%"])
 
             t_shares = Table(shares_data, colWidths=[200, 120, 80])
-            t_shares.setStyle(t_kpi.getStyle())
+            # ИСПРАВЛЕНИЕ: Применяем тот же вынесенный стиль
+            t_shares.setStyle(common_table_style)
             elements.append(t_shares)
             elements.append(Spacer(1, 15))
 

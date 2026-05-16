@@ -152,6 +152,43 @@ CREATE TABLE history_logs (
 CREATE INDEX idx_history_entity ON history_logs(entity, entity_id);
 CREATE INDEX idx_history_user ON history_logs(user_id);
 
+
+
+
+
+USE finance_db;
+
+-- 1. Создаем потерянную таблицу платежей
+CREATE TABLE IF NOT EXISTS payments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    transaction_id INT NOT NULL,
+    payment_date DATE NOT NULL,
+    amount DECIMAL(15, 2) NOT NULL,
+
+    CONSTRAINT fk_payments_transaction
+        FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+-- 2. Индекс для быстрого джоина (Python делает это постоянно)
+CREATE INDEX idx_payments_transaction ON payments(transaction_id);
+
+-- 3. МАГИЯ: Автоматически создаем платежи для всех твоих 20 существующих транзакций.
+-- Берем ID, дату и полную сумму из transactions и копируем в payments.
+INSERT INTO payments (transaction_id, payment_date, amount)
+SELECT id, DATE(date), total_amount
+FROM transactions;
+
+
+ALTER TABLE transactions ADD COLUMN counterparty_id INT NULL;
+
+ALTER TABLE transactions ADD CONSTRAINT fk_transactions_counterparty
+    FOREIGN KEY (counterparty_id) REFERENCES counterparties(id)
+    ON DELETE SET NULL ON UPDATE CASCADE;
+
+
+
 USE finance_db;
 
 -- =========================================================
@@ -277,12 +314,6 @@ INSERT INTO settings (`key`, `value`) VALUES
 ('date_format', 'yyyy-MM-dd'),
 ('currency', 'RUB');
 
-
-ALTER TABLE transactions ADD COLUMN counterparty_id INT NULL;
-
-ALTER TABLE transactions ADD CONSTRAINT fk_transactions_counterparty
-    FOREIGN KEY (counterparty_id) REFERENCES counterparties(id)
-    ON DELETE SET NULL ON UPDATE CASCADE;
 
 
 

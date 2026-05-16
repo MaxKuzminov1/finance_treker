@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (
     QComboBox, QLineEdit, QPushButton, QFrame, QMessageBox,
     QRadioButton, QButtonGroup
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QDoubleValidator
+from PyQt6.QtCore import Qt, QRegularExpression
+from PyQt6.QtGui import QRegularExpressionValidator
 
 
 class BudgetAddDialog(QDialog):
@@ -14,16 +14,15 @@ class BudgetAddDialog(QDialog):
         super().__init__(parent)
         self.categories = categories
         self.period_dates = period_dates
-        self.period_type = period_type  # Передаем тип периода (Месяц, Год и т.д.)
+        self.period_type = period_type
         self.category_id = None
         self.amount = 0
-        self.allocation_method = 'lump_sum'  # По умолчанию единая сумма
+        self.allocation_method = 'lump_sum'
 
         self.setWindowTitle("➕ Добавление бюджета")
-        # Если период большой, увеличиваем окно под меню распределения
         self.setFixedSize(450, 500 if period_type in ['Год', 'Квартал'] else 420)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
-        self.setStyleSheet("background-color: #F8FAFC;")
+        self.setStyleSheet("background-color: #F8FAFC; color: #1E293B;")
 
         self.init_ui()
 
@@ -32,12 +31,10 @@ class BudgetAddDialog(QDialog):
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
 
-        # Заголовок
         title = QLabel("Новый бюджет")
         title.setStyleSheet("font-size: 22px; font-weight: 800; color: #1E293B;")
         layout.addWidget(title)
 
-        # Информация о периоде
         period_frame = QFrame()
         period_frame.setStyleSheet("background: #F1F5F9; border-radius: 8px;")
         period_layout = QVBoxLayout(period_frame)
@@ -46,7 +43,6 @@ class BudgetAddDialog(QDialog):
         period_layout.addWidget(period_label)
         layout.addWidget(period_frame)
 
-        # Категория
         layout.addWidget(self._create_label("📁 Категория"))
         self.category_combo = QComboBox()
         for cat in self.categories:
@@ -55,17 +51,18 @@ class BudgetAddDialog(QDialog):
         self.category_combo.setStyleSheet(self._input_style())
         layout.addWidget(self.category_combo)
 
-        # Сумма
         layout.addWidget(self._create_label("💰 Плановая сумма (₽)"))
         self.amount_input = QLineEdit()
         self.amount_input.setPlaceholderText("0.00")
-        validator = QDoubleValidator(0.00, 999999999.99, 2)
-        validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+
+        # НАДЕЖНЫЙ ВАЛИДАТОР: разрешает цифры и одну точку или запятую
+        regex = QRegularExpression(r"^\d+([.,]\d{0,2})?$")
+        validator = QRegularExpressionValidator(regex)
         self.amount_input.setValidator(validator)
+
         self.amount_input.setStyleSheet(self._input_style())
         layout.addWidget(self.amount_input)
 
-        # === УМНЫЙ РАСПРЕДЕЛИТЕЛЬ (Появляется только для Года и Квартала) ===
         if self.period_type in ['Год', 'Квартал']:
             alloc_frame = QFrame()
             alloc_frame.setStyleSheet("background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px;")
@@ -77,7 +74,7 @@ class BudgetAddDialog(QDialog):
 
             self.radio_lump = QRadioButton(f"Единым лимитом на {self.period_type.lower()}")
             self.radio_divide = QRadioButton("Разбить поровну по месяцам")
-            self.radio_lump.setChecked(True)  # По умолчанию ставим единый лимит
+            self.radio_lump.setChecked(True)
 
             radio_style = "QRadioButton { color: #475569; font-size: 13px; font-weight: bold; padding: 4px; }"
             self.radio_lump.setStyleSheet(radio_style)
@@ -93,7 +90,6 @@ class BudgetAddDialog(QDialog):
 
         layout.addStretch()
 
-        # Кнопки
         buttons = QHBoxLayout()
         cancel_btn = QPushButton("Отмена")
         cancel_btn.setStyleSheet(self._btn_style(is_primary=False))
@@ -116,7 +112,7 @@ class BudgetAddDialog(QDialog):
 
     def _input_style(self):
         return """
-            QWidget { padding: 10px; border: 1px solid #CBD5E1; border-radius: 8px; background: white; font-size: 14px; }
+            QWidget { padding: 10px; border: 1px solid #CBD5E1; border-radius: 8px; background: white; color: #1E293B; font-size: 14px; }
             QWidget:focus { border-color: #4F46E5; }
         """
 
@@ -136,20 +132,20 @@ class BudgetAddDialog(QDialog):
         if not amount_text:
             QMessageBox.warning(self, "Ошибка", "Введите сумму")
             return
+        try:
+            self.amount = float(amount_text)
+        except ValueError:
+            QMessageBox.warning(self, "Ошибка", "Некорректный формат суммы")
+            return
 
         self.category_id = self.category_combo.currentData()
-        self.amount = float(amount_text)
 
-        # Сохраняем выбор пользователя для передачи в основной модуль
         if hasattr(self, 'radio_divide') and self.radio_divide.isChecked():
             self.allocation_method = 'divide'
-
         self.accept()
 
 
 class BudgetEditDialog(QDialog):
-    """Диалог редактирования бюджета (оставлен без изменений)"""
-
     def __init__(self, category_name, current_amount, parent=None):
         super().__init__(parent)
         self.category_name = category_name
@@ -158,16 +154,18 @@ class BudgetEditDialog(QDialog):
         self.setWindowTitle("✏️ Редактирование бюджета")
         self.setFixedSize(450, 320)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
-        self.setStyleSheet("background-color: #F8FAFC;")
+        self.setStyleSheet("background-color: #F8FAFC; color: #1E293B;")
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
+
         title = QLabel("Редактирование бюджета")
         title.setStyleSheet("font-size: 20px; font-weight: 800; color: #1E293B;")
         layout.addWidget(title)
+
         info_frame = QFrame()
         info_frame.setStyleSheet("background: #F1F5F9; border-radius: 8px;")
         info_layout = QVBoxLayout(info_frame)
@@ -175,20 +173,28 @@ class BudgetEditDialog(QDialog):
         cat_label.setStyleSheet("color: #475569; font-size: 13px;")
         info_layout.addWidget(cat_label)
         layout.addWidget(info_frame)
+
         lbl = QLabel("💰 Плановая сумма (₽)")
         lbl.setStyleSheet("color: #475569; font-weight: 700; font-size: 13px; margin-top: 8px;")
         layout.addWidget(lbl)
+
         self.amount_input = QLineEdit()
-        self.amount_input.setText(f"{self.current_amount:.2f}")
-        validator = QDoubleValidator(0.00, 999999999.99, 2)
-        validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+        # Выводим число, заменяя точку на запятую для избежания конфликтов с ОС
+        display_amount = f"{self.current_amount:.2f}".replace('.', ',')
+        self.amount_input.setText(display_amount)
+
+        # НАДЕЖНЫЙ ВАЛИДАТОР
+        regex = QRegularExpression(r"^\d+([.,]\d{0,2})?$")
+        validator = QRegularExpressionValidator(regex)
         self.amount_input.setValidator(validator)
+
         self.amount_input.setStyleSheet("""
-            QLineEdit { padding: 10px; border: 1px solid #CBD5E1; border-radius: 8px; background: white; font-size: 14px; }
+            QLineEdit { padding: 10px; border: 1px solid #CBD5E1; border-radius: 8px; background: white; color: #1E293B; font-size: 14px; }
             QLineEdit:focus { border-color: #4F46E5; }
         """)
         layout.addWidget(self.amount_input)
         layout.addStretch()
+
         buttons = QHBoxLayout()
         cancel_btn = QPushButton("Отмена")
         save_btn = QPushButton("Сохранить")
@@ -202,6 +208,7 @@ class BudgetEditDialog(QDialog):
         """)
         cancel_btn.clicked.connect(self.reject)
         save_btn.clicked.connect(self.save)
+
         buttons.addStretch()
         buttons.addWidget(cancel_btn)
         buttons.addWidget(save_btn)
@@ -213,5 +220,10 @@ class BudgetEditDialog(QDialog):
         if not amount_text:
             QMessageBox.warning(self, "Ошибка", "Введите сумму")
             return
-        self.amount = float(amount_text)
+        try:
+            self.amount = float(amount_text)
+        except ValueError:
+            QMessageBox.warning(self, "Ошибка", "Некорректный формат суммы")
+            return
+
         self.accept()

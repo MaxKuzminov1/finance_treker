@@ -2,6 +2,7 @@
 import MySQLdb
 from .repository import Repository
 
+
 class DBController:
     def __init__(self):
         self.conn = MySQLdb.connect(
@@ -9,10 +10,16 @@ class DBController:
             user="root",
             passwd="root",
             db="finance_db",
-            charset="utf8mb4"
+            charset="utf8mb4",
+            autocommit=True  # ВАЖНО: Включаем автокоммит для этого подключения!
         )
 
     def execute(self, query, params=None, fetch=False):
+        # Принудительно завершаем старые транзакции перед новым запросом,
+        # чтобы сбросить снимок (snapshot) REPEATABLE READ в MySQL
+        # и гарантированно получить самые свежие данные из других модулей.
+        self.conn.commit()
+
         cursor = self.conn.cursor()
         cursor.execute(query, params or ())
 

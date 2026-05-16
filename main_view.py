@@ -235,7 +235,6 @@ class View(QWidget):
         self.modules_scroll = QScrollArea()
         self.modules_scroll.setWidgetResizable(True)
         self.modules_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        # Убираем внутреннее автозаполнение холста скролл-бара, убирая белый фон
         self.modules_scroll.viewport().setAutoFillBackground(False)
 
         modules_widget = QWidget()
@@ -274,7 +273,15 @@ class View(QWidget):
 
         info_frame = QFrame()
         info_frame.setObjectName("info_frame")
-        info_layout = QVBoxLayout()
+        info_frame.setStyleSheet("""
+            #info_frame {
+                background-color: #F8FAFC;
+                border-radius: 14px;
+                padding: 16px;
+                border: 1px solid #E2E8F0;
+            }
+        """)
+        info_layout = QVBoxLayout(info_frame)
         info_layout.setSpacing(8)
 
         info_title = QLabel("ℹ️ О программе")
@@ -286,15 +293,6 @@ class View(QWidget):
             lbl.setStyleSheet("color: #64748B; font-size: 12px;")
             info_layout.addWidget(lbl)
 
-        info_frame.setLayout(info_layout)
-        info_frame.setStyleSheet("""
-            #info_frame {
-                background-color: #F8FAFC;
-                border-radius: 14px;
-                padding: 16px;
-                border: 1px solid #E2E8F0;
-            }
-        """)
         sidebar_layout.addWidget(info_frame)
         sidebar.setLayout(sidebar_layout)
 
@@ -312,6 +310,8 @@ class View(QWidget):
         self.stacked_widget.addWidget(self.module4)
 
         self.btn_group.buttonClicked.connect(self.on_module_selected)
+
+        # ИСПРАВЛЕНИЕ: Связываем обновленный трехпараметрический сигнал со слотом
         self.module3.drill_down_requested.connect(self.navigate_to_operations_and_filter)
 
         self.module_buttons[0].setChecked(True)
@@ -328,25 +328,24 @@ class View(QWidget):
         self.stacked_widget.setCurrentIndex(idx)
         self._apply_inline_theme(self.stacked_widget.currentWidget(), self.current_theme)
 
-    def navigate_to_operations_and_filter(self, category_name: str):
+    # ИСПРАВЛЕНИЕ: Слот теперь принимает 3 аргумента и прокидывает их без задержек в первый модуль
+    def navigate_to_operations_and_filter(self, category_name: str, date_from: QDate, date_to: QDate):
+        self.btn_group.blockSignals(True)
         self.module_buttons[0].setChecked(True)
+        self.btn_group.blockSignals(False)
 
-        def switch_and_filter():
-            try:
-                self.stacked_widget.setCurrentIndex(0)
-                if hasattr(self.module1, 'filter_by_category'):
-                    self.module1.filter_by_category(category_name)
-            except Exception as e:
-                print(f"Ошибка при переключении Drill-down: {e}")
-
-        QTimer.singleShot(50, switch_and_filter)
+        try:
+            self.stacked_widget.setCurrentIndex(0)
+            if hasattr(self.module1, 'filter_by_category'):
+                self.module1.filter_by_category(category_name, date_from, date_to)
+        except Exception as e:
+            print(f"Ошибка при переключении Drill-down: {e}")
 
     def toggle_theme(self):
         next_theme = "dark" if self.current_theme == "light" else "light"
         self.apply_theme(next_theme)
 
     def apply_theme(self, theme: str):
-        """Единая точка применения темы ко всему окну."""
         self.current_theme = theme
         self.apply_styles()
 
@@ -495,14 +494,12 @@ class View(QWidget):
                 border-bottom: 3px solid {p['accent']};
             }}
 
-            /* Исправление скролл-панели модулей */
             QScrollArea, #modules_container {{
                 border: none;
                 background: transparent;
                 background-color: transparent;
             }}
 
-            /* Динамический скроллбар */
             QScrollBar:vertical {{
                 background: {p['surface_2']};
                 width: 6px;
@@ -518,6 +515,28 @@ class View(QWidget):
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 height: 0px;
+            }}
+
+            /* === СТИЛИ ДЛЯ СИСТЕМНЫХ ОКОН (QMessageBox) === */
+            QMessageBox {{
+                background-color: {p['surface']};
+            }}
+            QMessageBox QLabel {{
+                color: {p['text']};
+                font-size: 14px;
+            }}
+            QMessageBox QPushButton {{
+                background-color: {p['surface_2']};
+                color: {p['text']};
+                border: 1px solid {p['border']};
+                border-radius: 6px;
+                padding: 6px 20px;
+                font-weight: bold;
+                min-width: 60px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: {p['surface_3']};
+                border-color: {p['accent']};
             }}
         """
         self.setStyleSheet(stylesheet)

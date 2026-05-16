@@ -22,8 +22,7 @@ class KPICard(QFrame):
     def setup_ui(self, title, icon, value, subtext):
         self.setMinimumHeight(140)
         self.setStyleSheet(
-            f"#kpi_card {{ background-color: white; border-radius: 12px; border: 1px solid #E2E8F0; }} "
-            f"#kpi_card:hover {{ border: 1px solid {self.color}; }}")
+            f"#kpi_card {{ background-color: white; border-radius: 12px; border: 1px solid #E2E8F0; }} #kpi_card:hover {{ border: 1px solid {self.color}; }}")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         header = QHBoxLayout()
@@ -70,7 +69,8 @@ class KPICard(QFrame):
 
 
 class Module3Widget(QWidget):
-    drill_down_requested = pyqtSignal(str)
+    # ИСПРАВЛЕНИЕ: Сигнал теперь строго принимает имя категории и две даты (с какого по какое число)
+    drill_down_requested = pyqtSignal(str, QDate, QDate)
 
     def __init__(self, controller=None):
         super().__init__()
@@ -86,12 +86,10 @@ class Module3Widget(QWidget):
         self.refresh_all()
 
     def apply_theme(self, theme: str):
-        """Метод вызывается главным окном при переключении темы."""
         self.current_theme = theme
         self.refresh_all()
 
     def sync_matplotlib_theme(self):
-        """Конфигурирует дефолтные параметры стилей matplotlib перед генерацией графиков."""
         try:
             import matplotlib
             if self.current_theme == "dark":
@@ -112,7 +110,6 @@ class Module3Widget(QWidget):
             pass
 
     def _patch_chart_widget(self, widget):
-        """Глубокое окрашивание внутренних элементов холста Matplotlib FigureCanvas."""
         if not widget:
             return
         if hasattr(widget, 'figure'):
@@ -173,7 +170,6 @@ class Module3Widget(QWidget):
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.addWidget(self.scroll)
 
-        # 1. ЗАГОЛОВОК И ЭКСПОРТ
         header = QHBoxLayout()
         title_vbox = QVBoxLayout()
         title_vbox.addWidget(
@@ -183,15 +179,13 @@ class Module3Widget(QWidget):
         self.btn_excel = QPushButton("📊 P&L Excel")
         self.btn_excel.setFixedSize(140, 40)
         self.btn_excel.setStyleSheet(
-            "QPushButton { background: #10B981; color: white; border-radius: 8px; font-weight: bold; } "
-            "QPushButton:hover { background: #059669; }")
+            "QPushButton { background: #10B981; color: white; border-radius: 8px; font-weight: bold; } QPushButton:hover { background: #059669; }")
         self.btn_excel.clicked.connect(self.export_excel)
 
         self.btn_pdf = QPushButton("📑 Отчет PDF")
         self.btn_pdf.setFixedSize(140, 40)
         self.btn_pdf.setStyleSheet(
-            "QPushButton { background: #0F172A; color: white; border-radius: 8px; font-weight: bold; } "
-            "QPushButton:hover { background: #1E293B; }")
+            "QPushButton { background: rgb(15, 23, 42); color: white; border-radius: 8px; font-weight: bold; } QPushButton:hover { background: rgb(30, 41, 59); }")
         self.btn_pdf.clicked.connect(self.export_pdf)
 
         header.addLayout(title_vbox)
@@ -200,7 +194,6 @@ class Module3Widget(QWidget):
         header.addWidget(self.btn_pdf)
         self.main_layout.addLayout(header)
 
-        # 2. ПАНЕЛЬ ФИЛЬТРОВ И БЫСТРЫХ ПЕРИОДОВ
         filter_frame = QFrame(objectName="filter_frame")
         filter_frame.setStyleSheet(
             "QFrame#filter_frame { background: white; border-radius: 12px; border: 1px solid #E2E8F0; }")
@@ -247,7 +240,6 @@ class Module3Widget(QWidget):
         f_layout.addWidget(self.btn_refresh)
         self.main_layout.addWidget(filter_frame)
 
-        # 3. KPI GRID
         kpi_grid = QGridLayout()
         self.card_inc = KPICard("Доходы", "📈", color="#10B981")
         self.card_exp = KPICard("Расходы", "📉", color="#EF4444")
@@ -257,15 +249,13 @@ class Module3Widget(QWidget):
         for c, r, col in cards: kpi_grid.addWidget(c, r, col)
         self.main_layout.addLayout(kpi_grid)
 
-        # 4. ГРАФИКИ
         charts_row1 = QHBoxLayout()
         self.line_container = self._create_chart_box("Динамика Cash Flow")
-        self.pie_container = self._create_chart_box("Структура расходов (Кликабельно)")
+        self.pie_container = self._create_chart_box("Структура расходов")
         charts_row1.addWidget(self.line_container, 2)
         charts_row1.addWidget(self.pie_container, 1)
         self.main_layout.addLayout(charts_row1)
 
-        # Нейро-сводка
         charts_row2 = QHBoxLayout()
         self.trend_frame = self._create_chart_box("Нейро-сводка")
         self.trend_label = QLabel("Ожидание данных...")
@@ -277,7 +267,6 @@ class Module3Widget(QWidget):
         charts_row2.addWidget(self.trend_frame, 1)
         self.main_layout.addLayout(charts_row2)
 
-        # 5. СИМУЛЯТОР И НАЛОГИ
         tools_row = QHBoxLayout()
 
         self.tax_frame = self._create_chart_box("🏦 Налоговый радар")
@@ -373,8 +362,11 @@ class Module3Widget(QWidget):
         lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         container.layout().addWidget(lbl)
 
+    # ИСПРАВЛЕНИЕ: Захватываем текущие выбранные даты из фильтра и шлем их дальше
     def handle_drill_down(self, category_name):
-        self.drill_down_requested.emit(category_name)
+        current_date_from = self.date_from.date()
+        current_date_to = self.date_to.date()
+        self.drill_down_requested.emit(category_name, current_date_from, current_date_to)
 
     def calculate_whatif(self):
         if not self.current_shares or self.base_income == 0:
@@ -406,9 +398,7 @@ class Module3Widget(QWidget):
         self.wi_result_margin.setText(f"Прогноз рентабельности: {new_margin:.1f}%")
 
     def refresh_all(self):
-        # Перед каждым рендером синхронизируем настройки глобальной палитры графиков
         self.sync_matplotlib_theme()
-
         d_from = self.date_from.date().toPyDate()
         d_to = self.date_to.date().toPyDate()
 
@@ -443,9 +433,9 @@ class Module3Widget(QWidget):
 
         ts = self.analytics_ctrl.get_time_series(d_from, d_to)
         if ts and any(p.income > 0 or p.expense > 0 for p in ts):
-            chart_line = create_line_chart("", [p.period_label for p in ts], [p.income for p in ts], [p.expense for p in ts], [p.profit for p in ts])
-            self.line_container.layout().addWidget(chart_line)
-            self._patch_chart_widget(chart_line) # Перекрашиваем холст
+            chart_canvas = create_line_chart("", [p.period_label for p in ts], [p.income for p in ts], [p.expense for p in ts], [p.profit for p in ts])
+            self.line_container.layout().addWidget(chart_canvas)
+            self._patch_chart_widget(chart_canvas)
         else:
             self._add_empty_label(self.line_container)
 
@@ -460,9 +450,9 @@ class Module3Widget(QWidget):
             self.wi_combo.setCurrentIndex(0)
             self.calculate_whatif()
 
-            chart_pie = create_pie_chart("", [s.category_name for s in shares], [s.amount for s in shares], on_click_callback=self.handle_drill_down)
-            self.pie_container.layout().addWidget(chart_pie)
-            self._patch_chart_widget(chart_pie) # Перекрашиваем холст
+            chart_canvas = create_pie_chart("", [s.category_name for s in shares], [s.amount for s in shares], on_click_callback=self.handle_drill_down)
+            self.pie_container.layout().addWidget(chart_canvas)
+            self._patch_chart_widget(chart_canvas)
         else:
             self.wi_combo.addItem("Нет данных")
             self._add_empty_label(self.pie_container, "Нет данных о расходах")
@@ -486,18 +476,20 @@ class Module3Widget(QWidget):
     def export_excel(self):
         d_from = self.date_from.date().toPyDate()
         d_to = self.date_to.date().toPyDate()
-        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить P&L отчет", f"PNL_{d_from}_{d_to}.xlsx", "Excel Files (*.xlsx)")
+        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить P&L отчет", f"PNL_{d_from}_{d_to}.xlsx",
+                                                   "Excel Files (*.xlsx)")
         if not file_path: return
         try:
             self.analytics_ctrl.service.export_pl_excel(d_from, d_to, file_path)
-            QMessageBox.information(self, "Успех", f"P&L Отчет сохранен в:\n{file_path}")
+            QMessageBox.information(self, "Усвех", f"P&L Отчет сохранен в:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка экспорта:\n{str(e)}")
 
     def export_pdf(self):
         d_from = self.date_from.date().toPyDate()
         d_to = self.date_to.date().toPyDate()
-        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить PDF-отчет", f"Аналитика_{d_from}_по_{d_to}.pdf", "PDF Files (*.pdf)")
+        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить PDF-отчет", f"Аналитика_{d_from}_по_{d_to}.pdf",
+                                                   "PDF Files (*.pdf)")
         if not file_path: return
         try:
             kpi = self.analytics_ctrl.get_kpi(d_from, d_to)

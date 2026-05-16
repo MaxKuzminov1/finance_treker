@@ -20,8 +20,7 @@ class Module1Widget(QWidget):
         super().__init__()
         self.controller = controller
         self.current_theme = "light"
-        # ИСПРАВЛЕНИЕ: Убрали жестко заданный белый фон, чтобы окно было прозрачным
-        # и наследовало правильный тёмный или светлый фон от main_view.
+        self.categories_data = []  # Сохраняем все категории с parent_id
         self.init_ui()
 
     def apply_theme(self, theme: str):
@@ -121,6 +120,7 @@ class Module1Widget(QWidget):
         date_sep.setStyleSheet("color: #94A3B8; font-weight: bold;")
 
         self.date_to = QDateEdit()
+        self.table = QTableWidget()  # Обеспечиваем явное объявление до биндинга сигналов
         self.date_to.setCalendarPopup(True)
         self.date_to.setDate(QDate.currentDate())
         self.date_to.setDisplayFormat("dd.MM.yyyy")
@@ -313,8 +313,7 @@ class Module1Widget(QWidget):
 
         table_layout.addLayout(table_header)
 
-        # Таблица
-        self.table = QTableWidget()
+        # Конфигурация таблицы
         self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels([
             "ID", "📅 Дата", "📊 Тип", "💰 Сумма",
@@ -381,21 +380,49 @@ class Module1Widget(QWidget):
         self.load_categories_for_filter()
         self.refresh()
 
-    def filter_by_category(self, category_name: str):
+    def filter_by_category(self, category_name: str, date_from: QDate = None, date_to: QDate = None):
         """Метод для внешнего вызова (Drill-down из аналитики)"""
+        if date_from and date_to:
+            self.date_from.blockSignals(True)
+            self.date_to.blockSignals(True)
+
+            self.date_from.setDate(date_from)
+            self.date_to.setDate(date_to)
+
+            self.date_from.blockSignals(False)
+            self.date_to.blockSignals(False)
+
+        self.category_filter.blockSignals(True)
         index = self.category_filter.findText(category_name)
         if index >= 0:
             self.category_filter.setCurrentIndex(index)
+        self.category_filter.blockSignals(False)
+
+        self.refresh()
+
+    def set_dates(self, date_from: QDate, date_to: QDate):
+        """Дополнительный метод, если нужно установить только даты"""
+        self.date_from.blockSignals(True)
+        self.date_to.blockSignals(True)
+
+        self.date_from.setDate(date_from)
+        self.date_to.setDate(date_to)
+
+        self.date_from.blockSignals(False)
+        self.date_to.blockSignals(False)
+
+        self.refresh()
 
     def load_categories_for_filter(self):
         try:
-            categories = self.controller.get_categories()
+            # ИСПРАВЛЕНИЕ: Сохраняем данные категорий (с parent_id) для дерева
+            self.categories_data = self.controller.get_categories()
             current_text = self.category_filter.currentText()
 
             self.category_filter.blockSignals(True)
             self.category_filter.clear()
             self.category_filter.addItem("Все категории")
-            for cat in categories:
+            for cat in self.categories_data:
                 self.category_filter.addItem(cat["name"])
 
             index = self.category_filter.findText(current_text)
@@ -404,6 +431,34 @@ class Module1Widget(QWidget):
             self.category_filter.blockSignals(False)
         except Exception as e:
             print(f"Ошибка при загрузке категорий: {e}")
+
+    def get_category_and_descendants(self, category_name: str) -> set:
+        """Возвращает множество, содержащее саму категорию и все ее подкатегории (рекурсивно)"""
+        if not hasattr(self, 'categories_data') or not self.categories_data:
+            return {category_name}
+
+        cat_id = None
+        for c in self.categories_data:
+            if c["name"] == category_name:
+                cat_id = c["id"]
+                break
+
+        if cat_id is None:
+            return {category_name}
+
+        descendants = {category_name}
+        to_process = [cat_id]
+
+        # Обход в ширину (BFS) для поиска всех вложенных подкатегорий
+        while to_process:
+            curr_id = to_process.pop(0)
+            for c in self.categories_data:
+                # Если текущая категория является родителем для c
+                if c.get("parent_id") == curr_id and c["name"] not in descendants:
+                    descendants.add(c["name"])
+                    to_process.append(c["id"])
+
+        return descendants
 
     def reset_filters(self):
         self.search.clear()
@@ -460,6 +515,11 @@ class Module1Widget(QWidget):
         date_from = self.date_from.date().toPyDate()
         date_to = self.date_to.date().toPyDate()
 
+        # ИСПРАВЛЕНИЕ: Получаем список разрешенных категорий (включая все подкатегории)
+        allowed_categories = None
+        if category_filter != "Все категории":
+            allowed_categories = self.get_category_and_descendants(category_filter)
+
         filtered = []
 
         for t in data:
@@ -478,8 +538,10 @@ class Module1Widget(QWidget):
             elif isinstance(cats, str):
                 cat_names = [c.strip() for c in cats.split(',')]
 
-            if category_filter != "Все категории" and category_filter not in cat_names:
-                continue
+            # Проверяем, пересекаются ли категории транзакции с разрешенным деревом категорий
+            if allowed_categories is not None:
+                if not any(c_name in allowed_categories for c_name in cat_names):
+                    continue
 
             raw_date = t.get("date")
             try:
@@ -503,16 +565,13 @@ class Module1Widget(QWidget):
         type_colors = {"income": QColor("#10B981"), "expense": QColor("#EF4444")}
         type_icons = {"income": "💰", "expense": "💸"}
 
-        # Динамический цвет текста для записей таблицы
         base_text_color = QColor("#E5E7EB") if getattr(self, "current_theme", "light") == "dark" else QColor("#475569")
 
         for i, t in enumerate(filtered):
-            # ID
             item_id = QTableWidgetItem(str(t.get("id", "")))
             item_id.setForeground(base_text_color)
             self.table.setItem(i, 0, item_id)
 
-            # ДАТА
             date_value = t.get("date", "")
             if isinstance(date_value, (datetime, date)):
                 date_str = date_value.strftime("%d.%m.%Y")
@@ -526,13 +585,11 @@ class Module1Widget(QWidget):
             item_date.setForeground(base_text_color)
             self.table.setItem(i, 1, item_date)
 
-            # Тип
             t_type = t.get("type", "")
             type_item = QTableWidgetItem(f"{type_icons.get(t_type, '')} {'Доход' if t_type == 'income' else 'Расход'}")
             type_item.setForeground(type_colors.get(t_type, base_text_color))
             self.table.setItem(i, 2, type_item)
 
-            # Сумма
             amount = t.get("total_amount", 0)
             amount_item = QTableWidgetItem(f"{amount:,.2f} ₽")
             amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -542,7 +599,6 @@ class Module1Widget(QWidget):
             amount_item.setFont(font)
             self.table.setItem(i, 3, amount_item)
 
-            # Категории
             cats_display = t.get("categories", "")
             cats_str = ", ".join([str(c.get("name", "")) for c in cats_display if isinstance(c, dict)]) if isinstance(
                 cats_display, list) else (str(cats_display) if cats_display else "Без категории")
@@ -550,27 +606,23 @@ class Module1Widget(QWidget):
             item_cat.setForeground(base_text_color)
             self.table.setItem(i, 4, item_cat)
 
-            # Комментарий
             item_com = QTableWidgetItem(str(t.get("comment", "")))
             item_com.setForeground(base_text_color)
             self.table.setItem(i, 5, item_com)
 
-            # Оплачено
             paid_item = QTableWidgetItem(f"{t.get('paid', 0):,.2f} ₽")
             paid_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             paid_item.setForeground(base_text_color)
             self.table.setItem(i, 6, paid_item)
 
-            # Остаток
             remaining_item = QTableWidgetItem(f"{t.get('remaining', 0):,.2f} ₽")
             remaining_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             remaining_item.setForeground(base_text_color)
             self.table.setItem(i, 7, remaining_item)
 
-            # Статус
             status = t.get("status", "")
             status_item = QTableWidgetItem(status)
-            if status == "Оплачена":
+            if status == "Оплачена" or status == "Оплачено":
                 status_item.setForeground(QColor("#10B981"))
             elif status == "Частично":
                 status_item.setForeground(QColor("#F59E0B"))

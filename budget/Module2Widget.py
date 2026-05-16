@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTableWidget, QTableWidgetItem, QLabel,
+    QTableWidget, QTableWidgetItem, QLabel, QLineEdit,
     QComboBox, QFrame, QTabWidget, QHeaderView,
     QDateEdit, QMessageBox, QDialog
 )
@@ -10,6 +10,143 @@ from PyQt6.QtGui import QColor
 import calendar
 from .dialogs import BudgetAddDialog, BudgetEditDialog
 from .plan_fact import PlanFactTab
+
+
+class TemplateSaveDialog(QDialog):
+    """Кастомный диалог для сохранения шаблона с красивым UI"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.template_name = ""
+
+        self.setWindowTitle("⭐ Сохранение шаблона")
+        self.setFixedSize(400, 220)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.setStyleSheet("background-color: #F8FAFC; color: #1E293B;")
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+
+        title = QLabel("Название нового шаблона")
+        title.setStyleSheet("font-weight: 800; font-size: 16px; color: #1E293B;")
+        layout.addWidget(title)
+
+        desc = QLabel("Введите понятное имя, чтобы легко найти его позже.")
+        desc.setStyleSheet("color: #64748B; font-size: 13px;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("Например: Базовый на месяц...")
+        self.name_input.setStyleSheet("""
+            QLineEdit { padding: 12px; border: 1px solid #CBD5E1; border-radius: 8px; background: white; font-size: 14px; color: #1E293B; }
+            QLineEdit:focus { border-color: #4F46E5; }
+        """)
+        layout.addWidget(self.name_input)
+
+        layout.addStretch()
+
+        btn_layout = QHBoxLayout()
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setStyleSheet("""
+            QPushButton { background: white; color: #475569; border: 1px solid #CBD5E1; border-radius: 8px; padding: 10px 16px; font-weight: bold; }
+            QPushButton:hover { background: #F1F5F9; }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+
+        save_btn = QPushButton("Сохранить")
+        save_btn.setStyleSheet("""
+            QPushButton { background: #4F46E5; color: white; border: none; border-radius: 8px; padding: 10px 24px; font-weight: bold; }
+            QPushButton:hover { background: #4338CA; }
+        """)
+        save_btn.clicked.connect(self.save)
+
+        btn_layout.addStretch()
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(save_btn)
+
+        layout.addLayout(btn_layout)
+
+    def save(self):
+        name = self.name_input.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Ошибка", "Пожалуйста, введите название шаблона!")
+            return
+        self.template_name = name
+        self.accept()
+
+
+class TemplateManagerDialog(QDialog):
+    """Диалог управления (загрузка/удаление) именованными шаблонами"""
+
+    def __init__(self, templates, parent=None):
+        super().__init__(parent)
+        self.templates = templates
+        self.selected_template_id = None
+        self.selected_template_name = None
+        self.action = None
+
+        self.setWindowTitle("📥 Менеджер шаблонов")
+        self.setFixedSize(400, 200)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.setStyleSheet("background-color: #F8FAFC; color: #1E293B;")
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+
+        title = QLabel("Выберите сохраненный шаблон:")
+        title.setStyleSheet("font-weight: bold; font-size: 14px; color: #1E293B;")
+        layout.addWidget(title)
+
+        self.combo = QComboBox()
+        for tid, tname in self.templates:
+            self.combo.addItem(f"📁 {tname}", tid)
+        self.combo.setStyleSheet("""
+            QComboBox { padding: 10px 12px; border: 1px solid #CBD5E1; border-radius: 8px; background: white; font-size: 14px; color: #1E293B; }
+        """)
+        layout.addWidget(self.combo)
+
+        layout.addStretch()
+
+        btn_layout = QHBoxLayout()
+
+        del_btn = QPushButton("🗑 Удалить")
+        del_btn.setStyleSheet("""
+            QPushButton { background: #FEE2E2; color: #DC2626; border-radius: 8px; padding: 10px 16px; font-weight: bold; } 
+            QPushButton:hover { background: #FECACA; }
+        """)
+        del_btn.clicked.connect(self.on_delete)
+
+        load_btn = QPushButton("📥 Загрузить")
+        load_btn.setStyleSheet("""
+            QPushButton { background: #4F46E5; color: white; border-radius: 8px; padding: 10px 24px; font-weight: bold; } 
+            QPushButton:hover { background: #4338CA; }
+        """)
+        load_btn.clicked.connect(self.on_load)
+
+        btn_layout.addWidget(del_btn)
+        btn_layout.addStretch()
+        btn_layout.addWidget(load_btn)
+
+        layout.addLayout(btn_layout)
+
+    def on_load(self):
+        self.selected_template_id = self.combo.currentData()
+        self.selected_template_name = self.combo.currentText().replace("📁 ", "")
+        self.action = 'load'
+        self.accept()
+
+    def on_delete(self):
+        self.selected_template_id = self.combo.currentData()
+        self.selected_template_name = self.combo.currentText().replace("📁 ", "")
+        self.action = 'delete'
+        self.accept()
 
 
 class Module2Widget(QWidget):
@@ -22,25 +159,59 @@ class Module2Widget(QWidget):
         self.budget_counts = []
         self.budget_cat_ids = []
         self.categories = []
-        self.current_theme = "light"  # Отслеживаем текущую тему
-
-        # Секретный период для хранения шаблона "По умолчанию"
-        self.TEMPLATE_START = '1999-01-01'
-        self.TEMPLATE_END = '1999-12-31'
+        self.current_theme = "light"
+        self.block_refresh = False
 
         self.setStyleSheet("background-color: #F3F4F6;")
+
+        # Автоматическое создание таблиц для именных шаблонов (выполнится один раз)
+        self._init_template_tables()
 
         self.init_ui()
         self.load_categories()
         self.load_budgets()
 
+        # 🔄 УМНЫЙ ТАЙМЕР АВТООБНОВЛЕНИЯ
+        self.auto_refresh_timer = QTimer(self)
+        self.auto_refresh_timer.setInterval(2000)
+        self.auto_refresh_timer.timeout.connect(self.auto_refresh_data)
+        self.auto_refresh_timer.start()
+
+    def _init_template_tables(self):
+        """Создает таблицы для хранения шаблонов, если их еще нет в базе"""
+        try:
+            self.controller.execute("""
+                CREATE TABLE IF NOT EXISTS budget_templates (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL UNIQUE
+                )
+            """)
+            self.controller.execute("""
+                CREATE TABLE IF NOT EXISTS budget_template_items (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    template_id INT NOT NULL,
+                    category_id INT NOT NULL,
+                    amount DECIMAL(15, 2) NOT NULL,
+                    FOREIGN KEY (template_id) REFERENCES budget_templates(id) ON DELETE CASCADE,
+                    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+                )
+            """)
+        except Exception as e:
+            print(f"Ошибка при инициализации таблиц шаблонов: {e}")
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refresh_all()
+
+    def auto_refresh_data(self):
+        if self.isVisible() and not self.block_refresh:
+            self.refresh_all()
+
     def apply_theme(self, theme: str):
-        """Метод вызывается главным окном при переключении темы."""
         self.current_theme = theme
         self.refresh_all()
 
     def sync_matplotlib_theme(self):
-        """Конфигурирует дефолтные параметры стилей matplotlib перед генерацией графиков."""
         try:
             import matplotlib
             if self.current_theme == "dark":
@@ -61,13 +232,11 @@ class Module2Widget(QWidget):
             pass
 
     def patch_all_charts(self):
-        """Находит все графики внутри вкладки План/Факт и перекрашивает их."""
         for widget in self.plan_fact_tab.findChildren(QWidget):
             if hasattr(widget, 'figure'):
                 self._patch_chart_widget(widget)
 
     def _patch_chart_widget(self, widget):
-        """Глубокое окрашивание внутренних элементов холста Matplotlib."""
         if not widget or not hasattr(widget, 'figure'):
             return
         try:
@@ -97,7 +266,7 @@ class Module2Widget(QWidget):
                         text.set_color(text_color)
             widget.draw()
         except Exception as e:
-            print(f"Ошибка кастомизации графика в Модуле 2: {e}")
+            print(f"Ошибка кастомизации графика: {e}")
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -131,13 +300,11 @@ class Module2Widget(QWidget):
         self.period_type_combo.currentTextChanged.connect(self.on_period_type_changed)
         filter_layout.addWidget(self.period_type_combo)
 
-        # Контейнер для динамических фильтров
         self.dynamic_filters = QWidget()
         self.dynamic_layout = QHBoxLayout(self.dynamic_filters)
         self.dynamic_layout.setContentsMargins(0, 0, 0, 0)
         self.dynamic_layout.setSpacing(8)
 
-        # Месяц (по умолчанию)
         self.month_combo = QComboBox()
         self.month_combo.addItems(
             ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь",
@@ -156,7 +323,6 @@ class Module2Widget(QWidget):
 
         filter_layout.addWidget(self.dynamic_filters)
 
-        # ВИЗУАЛЬНАЯ ПОДСКАЗКА
         self.period_hint_lbl = QLabel("")
         self.period_hint_lbl.setStyleSheet("color: #D97706; font-size: 12px; font-weight: bold;")
         filter_layout.addWidget(self.period_hint_lbl)
@@ -188,6 +354,8 @@ class Module2Widget(QWidget):
         self.plan_fact_tab = PlanFactTab(self.controller, self)
         self.tab_widget.addTab(self.plan_fact_tab, "📊 Исполнение (План/Факт)")
 
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+
         main_layout.addWidget(self.tab_widget)
 
     def setup_budget_tab(self):
@@ -213,23 +381,21 @@ class Module2Widget(QWidget):
         copy_prev_btn.clicked.connect(self.copy_from_previous)
         copy_prev_btn.setToolTip("Работает только если выбран период 'Месяц'")
 
-        save_def_btn = QPushButton("⭐ Сохранить как шаблон")
-        save_def_btn.setStyleSheet(sec_btn_style)
-        save_def_btn.clicked.connect(self.save_as_default)
-        save_def_btn.setToolTip("Сохранить текущие суммы как базовый шаблон")
+        save_tpl_btn = QPushButton("⭐ Сохранить как шаблон")
+        save_tpl_btn.setStyleSheet(sec_btn_style)
+        save_tpl_btn.clicked.connect(self.save_as_template)
 
-        load_def_btn = QPushButton("📥 Загрузить шаблон")
-        load_def_btn.setStyleSheet(sec_btn_style)
-        load_def_btn.clicked.connect(self.load_from_default)
+        load_tpl_btn = QPushButton("📥 Шаблоны")
+        load_tpl_btn.setStyleSheet(sec_btn_style)
+        load_tpl_btn.clicked.connect(self.manage_templates)
 
         toolbar.addWidget(add_btn)
         toolbar.addWidget(copy_prev_btn)
-        toolbar.addWidget(save_def_btn)
-        toolbar.addWidget(load_def_btn)
+        toolbar.addWidget(save_tpl_btn)
+        toolbar.addWidget(load_tpl_btn)
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
-        # Таблица бюджетов
         self.budget_table = QTableWidget()
         self.budget_table.setColumnCount(4)
         self.budget_table.setHorizontalHeaderLabels(["Категория", "Тип", "Плановая сумма (₽)", "Действия"])
@@ -320,40 +486,110 @@ class Module2Widget(QWidget):
         self._transfer_budgets(f"{prev_year}-{prev_month:02d}-01", f"{prev_year}-{prev_month:02d}-{last_day}",
                                dates['start'], dates['end'])
 
-    def save_as_default(self):
+    def save_as_template(self):
         if self.budget_table.rowCount() == 0:
-            QMessageBox.warning(self, "Внимание", "Добавьте лимиты, чтобы сохранить шаблон.")
+            QMessageBox.warning(self, "Внимание", "Добавьте лимиты в таблицу, чтобы сохранить их как шаблон.")
             return
 
-        reply = QMessageBox.question(self, "Подтверждение",
-                                     "Сделать текущие лимиты стандартными?\n\nЭто перезапишет старый шаблон.",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        dialog = TemplateSaveDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
 
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                dates = self.get_period_dates()
-                self.controller.execute("DELETE FROM budgets WHERE period_start = %s AND period_end = %s",
-                                        (self.TEMPLATE_START, self.TEMPLATE_END))
+        name = dialog.template_name
+        self.block_refresh = True
+        try:
+            dates = self.get_period_dates()
+            current = self.controller.execute("""
+                SELECT category_id, SUM(planned_amount) 
+                FROM budgets 
+                WHERE period_start >= %s AND period_end <= %s
+                GROUP BY category_id
+            """, (dates['start'], dates['end']), fetch=True)
 
-                current = self.controller.execute("""
-                    SELECT category_id, SUM(planned_amount) 
-                    FROM budgets 
-                    WHERE period_start >= %s AND period_end <= %s
-                    GROUP BY category_id
-                """, (dates['start'], dates['end']), fetch=True)
+            existing = self.controller.execute("SELECT id FROM budget_templates WHERE name = %s", (name,), fetch=True)
 
-                for cat_id, amount in current:
-                    self.controller.execute(
-                        "INSERT INTO budgets (category_id, period_start, period_end, planned_amount) VALUES (%s, %s, %s, %s)",
-                        (cat_id, self.TEMPLATE_START, self.TEMPLATE_END, amount)
-                    )
-                QMessageBox.information(self, "Успех", "Шаблон успешно обновлен!")
-            except Exception as e:
-                QMessageBox.critical(self, "Ошибка", f"Ошибка сохранения: {e}")
+            if existing:
+                reply = QMessageBox.question(self, "Замена", f"Шаблон '{name}' уже существует.\nПерезаписать его?",
+                                             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+                tid = existing[0][0]
+                self.controller.execute("DELETE FROM budget_template_items WHERE template_id = %s", (tid,))
+            else:
+                self.controller.execute("INSERT INTO budget_templates (name) VALUES (%s)", (name,))
+                res = self.controller.execute("SELECT id FROM budget_templates WHERE name = %s", (name,), fetch=True)
+                tid = res[0][0]
 
-    def load_from_default(self):
-        dates = self.get_period_dates()
-        self._transfer_budgets(self.TEMPLATE_START, self.TEMPLATE_END, dates['start'], dates['end'])
+            for cat_id, amount in current:
+                self.controller.execute(
+                    "INSERT INTO budget_template_items (template_id, category_id, amount) VALUES (%s, %s, %s)",
+                    (tid, cat_id, amount)
+                )
+            QMessageBox.information(self, "Успех", f"Шаблон '{name}' успешно сохранен!")
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка сохранения: {e}")
+        finally:
+            self.block_refresh = False
+
+    def manage_templates(self):
+        self.block_refresh = True
+        try:
+            templates = self.controller.execute("SELECT id, name FROM budget_templates ORDER BY name", fetch=True)
+            if not templates:
+                QMessageBox.information(self, "Инфо",
+                                        "У вас пока нет сохраненных шаблонов.\n\nНастройте лимиты и нажмите 'Сохранить как шаблон'.")
+                return
+
+            dialog = TemplateManagerDialog(templates, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                tid = dialog.selected_template_id
+                tname = dialog.selected_template_name
+
+                if dialog.action == 'delete':
+                    confirm = QMessageBox.question(self, "Подтверждение", f"Точно удалить шаблон '{tname}'?",
+                                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                    if confirm == QMessageBox.StandardButton.Yes:
+                        self.controller.execute("DELETE FROM budget_templates WHERE id = %s", (tid,))
+                        QMessageBox.information(self, "Успех", "Шаблон успешно удален.")
+
+                elif dialog.action == 'load':
+                    items = self.controller.execute(
+                        "SELECT category_id, amount FROM budget_template_items WHERE template_id = %s", (tid,),
+                        fetch=True)
+                    if not items:
+                        QMessageBox.warning(self, "Пусто", "Этот шаблон пуст.")
+                        return
+
+                    dates = self.get_period_dates()
+                    target_start = dates['start']
+                    target_end = dates['end']
+
+                    target_existing = self.controller.execute("""
+                        SELECT category_id FROM budgets 
+                        WHERE period_start >= %s AND period_end <= %s
+                    """, (target_start, target_end), fetch=True)
+                    existing_ids = {row[0] for row in target_existing}
+
+                    added_count = 0
+                    for cat_id, amount in items:
+                        if cat_id not in existing_ids:
+                            self.controller.execute(
+                                "INSERT INTO budgets (category_id, period_start, period_end, planned_amount) VALUES (%s, %s, %s, %s)",
+                                (cat_id, target_start, target_end, amount)
+                            )
+                            added_count += 1
+
+                    if added_count > 0:
+                        QMessageBox.information(self, "Успех",
+                                                f"Из шаблона '{tname}' успешно загружено лимитов: {added_count}.")
+                    else:
+                        QMessageBox.information(self, "Инфо",
+                                                "Все категории из этого шаблона уже существуют в текущем периоде (дубликаты пропущены).")
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Произошла ошибка: {e}")
+        finally:
+            self.block_refresh = False
+            self.refresh_all()
 
     def on_period_type_changed(self):
         for i in reversed(range(self.dynamic_layout.count())):
@@ -427,7 +663,7 @@ class Module2Widget(QWidget):
                 {'id': r[0], 'name': r[1], 'type': 'Доход' if r[2] == 'income' else 'Расход', 'type_en': r[2]} for r in
                 rows]
         except Exception as e:
-            print(e)
+            print(f"Ошибка загрузки категорий: {e}")
 
     def load_budgets(self):
         try:
@@ -446,7 +682,6 @@ class Module2Widget(QWidget):
             self.budget_counts = []
             self.budget_cat_ids = []
 
-            # Цвета кнопок зависят от текущей темы
             is_dark = self.current_theme == "dark"
 
             edit_bg = "#334155" if is_dark else "#F1F5F9"
@@ -507,11 +742,12 @@ class Module2Widget(QWidget):
             print(f"Ошибка загрузки бюджетов: {e}")
 
     def show_add_dialog(self):
-        period_type = self.period_type_combo.currentText()
-        dialog = BudgetAddDialog(self.categories, self.get_period_dates(), period_type, self)
+        self.block_refresh = True
+        try:
+            period_type = self.period_type_combo.currentText()
+            dialog = BudgetAddDialog(self.categories, self.get_period_dates(), period_type, self)
 
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
                 dates = self.get_period_dates()
 
                 if dialog.allocation_method == 'divide':
@@ -551,41 +787,89 @@ class Module2Widget(QWidget):
                     self.controller.execute(
                         "INSERT INTO budgets (category_id, period_start, period_end, planned_amount) VALUES (%s, %s, %s, %s)",
                         (dialog.category_id, dates['start'], dates['end'], dialog.amount))
-                self.refresh_all()
-            except Exception as e:
-                QMessageBox.critical(self, "Ошибка", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+        finally:
+            self.block_refresh = False
+            self.refresh_all()
 
     def edit_budget(self, row):
-        bid = self.budget_ids[row]
-        category_name = self.budget_table.item(row, 0).text()
-        current_amount = float(self.budget_table.item(row, 2).text().replace(" ₽", "").replace(",", ""))
+        self.block_refresh = True
+        try:
+            bid = self.budget_ids[row]
+            category_name = self.budget_table.item(row, 0).text()
 
-        dialog = BudgetEditDialog(category_name, current_amount, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.controller.execute("UPDATE budgets SET planned_amount=%s WHERE id=%s", (dialog.amount, bid))
+            amount_str = self.budget_table.item(row, 2).text()
+            clean_amount = amount_str.replace(" ₽", "").replace(" ", "").replace("\xa0", "").replace(",", "")
+            current_amount = float(clean_amount)
+
+            dialog = BudgetEditDialog(category_name, current_amount, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self.controller.execute("UPDATE budgets SET planned_amount=%s WHERE id=%s", (dialog.amount, bid))
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Сбой при редактировании: {e}")
+        finally:
+            self.block_refresh = False
             self.refresh_all()
 
     def delete_budget(self, row):
-        category = self.budget_table.item(row, 0).text()
-        count = self.budget_counts[row]
-        cat_id = self.budget_cat_ids[row]
+        self.block_refresh = True
+        try:
+            category = self.budget_table.item(row, 0).text()
+            count = self.budget_counts[row]
+            cat_id = self.budget_cat_ids[row]
 
-        msg = f"Удалить лимит '{category}'?"
-        if count > 1:
-            msg = f"Внимание! Внутри этого периода есть {count} отдельных записей для '{category}'.\nУдалить их все?"
+            msg = f"Удалить лимит '{category}'?"
+            if count > 1:
+                msg = f"Внимание! Внутри этого периода есть {count} отдельных записей для '{category}'.\nУдалить их все?"
 
-        if QMessageBox.question(self, "Удаление", msg) == QMessageBox.StandardButton.Yes:
-            dates = self.get_period_dates()
-            self.controller.execute("""
-                DELETE FROM budgets 
-                WHERE category_id = %s AND period_start >= %s AND period_end <= %s
-            """, (cat_id, dates['start'], dates['end']))
+            if QMessageBox.question(self, "Удаление", msg) == QMessageBox.StandardButton.Yes:
+                dates = self.get_period_dates()
+                self.controller.execute("""
+                    DELETE FROM budgets 
+                    WHERE category_id = %s AND period_start >= %s AND period_end <= %s
+                """, (cat_id, dates['start'], dates['end']))
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка удаления: {e}")
+        finally:
+            self.block_refresh = False
             self.refresh_all()
 
     def refresh_all(self):
+        if self.block_refresh:
+            return
+
+        selected_rows = [item.row() for item in self.budget_table.selectedItems()]
+        v_scroll = self.budget_table.verticalScrollBar().value()
+        h_scroll = self.budget_table.horizontalScrollBar().value()
+
+        pf_table = self.plan_fact_tab.plan_fact_table
+        pf_selected_rows = [item.row() for item in pf_table.selectedItems()]
+        pf_v_scroll = pf_table.verticalScrollBar().value()
+        pf_h_scroll = pf_table.horizontalScrollBar().value()
+
         self.sync_matplotlib_theme()
+        self.load_categories()
         self.load_budgets()
         self.plan_fact_tab.load_data(self.get_period_dates())
 
-        # Небольшая задержка, чтобы Matplotlib успел нарисовать графики перед окрашиванием
+        self.budget_table.clearSelection()
+        for row in selected_rows:
+            if row < self.budget_table.rowCount():
+                self.budget_table.selectRow(row)
+        self.budget_table.verticalScrollBar().setValue(v_scroll)
+        self.budget_table.horizontalScrollBar().setValue(h_scroll)
+
+        pf_table.clearSelection()
+        for row in pf_selected_rows:
+            if row < pf_table.rowCount():
+                pf_table.selectRow(row)
+        pf_table.verticalScrollBar().setValue(pf_v_scroll)
+        pf_table.horizontalScrollBar().setValue(pf_h_scroll)
+
         QTimer.singleShot(100, self.patch_all_charts)
+
+    def on_tab_changed(self, index):
+        if index == 1:
+            self.plan_fact_tab.load_data(self.get_period_dates())
+            self.sync_matplotlib_theme()
