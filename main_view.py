@@ -2,7 +2,6 @@
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import QColor, QFont
-from SettingsWidget import SettingsWidget
 from references.Module1Widget import Module1Widget
 from transactions.Module4Widget import Module4Widget
 from budget.Module2Widget import Module2Widget
@@ -10,58 +9,86 @@ from analytics.Module3Widget import Module3Widget
 
 
 class ModuleButton(QPushButton):
-    """Карточка модуля с анимацией тени при наведении."""
+    """Карточка модуля с кастомным Layout для заголовка, подзаголовка и анимацией тени."""
 
     def __init__(self, icon: str, title: str, subtitle: str, parent=None):
         super().__init__(parent)
-        self.icon = icon
-        self.title = title
-        self.subtitle = subtitle
-        self._shadow_radius = 8  # начальный радиус тени
-        self._shadow_color = QColor(0, 0, 0, 20)  # полупрозрачная чёрная тень
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(72)
+
+        # Внутренний Layout кнопки
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(14)
+
+        # Иконка
+        self.icon_label = QLabel(icon)
+        self.icon_label.setFont(QFont("Segoe UI Emoji", 18))
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.icon_label)
+
+        # Контейнер для текстов
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(2)
+        text_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        self.title_label = QLabel(title)
+        self.title_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        text_layout.addWidget(self.title_label)
+
+        self.subtitle_label = QLabel(subtitle)
+        self.subtitle_label.setFont(QFont("Segoe UI", 10))
+        text_layout.addWidget(self.subtitle_label)
+
+        layout.addLayout(text_layout)
+        layout.addStretch()
+
+        # Эффект тени
+        self._shadow_radius = 8
         self._shadow_effect = QGraphicsDropShadowEffect()
         self._shadow_effect.setBlurRadius(self._shadow_radius)
-        self._shadow_effect.setColor(self._shadow_color)
+        self._shadow_effect.setColor(QColor(0, 0, 0, 15))
         self._shadow_effect.setOffset(0, 2)
         self.setGraphicsEffect(self._shadow_effect)
 
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(64)
-        self.setFlat(True)
-        self.update_style()
+        # Привязка переключения состояния к обновлению стилей
+        self.toggled.connect(self.update_style)
+        self.update_style(False)
 
-    def update_style(self):
-        """Пересоздаём таблицу стилей в зависимости от выделения."""
-        selected = self.isChecked()
-        bg = """
-            qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                            stop:0 #6C5CE7, stop:1 #4F46E5)
-        """ if selected else "#FFFFFF"
-        text_color = "#FFFFFF" if selected else "#1E293B"
-        subtitle_color = "rgba(255,255,255,0.7)" if selected else "#64748B"
-        self.setStyleSheet(f"""
-            ModuleButton {{
-                background: {bg};
-                border-radius: 16px;
-                padding: 12px 16px;
-                text-align: left;
-                font-size: 14px;
-                font-weight: 600;
-                color: {text_color};
-                border: none;
-            }}
-            ModuleButton:hover {{
-                background: {"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6C5CE7, stop:1 #4F46E5)" if not selected else bg};
-                color: white;
-            }}
-            ModuleButton:hover:checked {{
-                background: {bg};
-            }}
-        """)
-        self.setText(f"  {self.icon}  {self.title}")
+    def update_style(self, checked=None):
+        """Обновление цветов элементов внутри Layout при выделении."""
+        if checked is None:
+            checked = self.isChecked()
+
+        if checked:
+            self.setStyleSheet("""
+                ModuleButton {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6C5CE7, stop:1 #4F46E5);
+                    border-radius: 14px;
+                    border: none;
+                }
+            """)
+            self.title_label.setStyleSheet("color: #FFFFFF;")
+            self.subtitle_label.setStyleSheet("color: rgba(255, 255, 255, 0.75);")
+        else:
+            self.setStyleSheet("""
+                ModuleButton {
+                    background: #FFFFFF;
+                    border-radius: 14px;
+                    border: 1px solid #E2E8F0;
+                }
+                ModuleButton:hover {
+                    background: #F8FAFC;
+                    border: 1px solid #CBD5E1;
+                }
+            """)
+            self.title_label.setStyleSheet("color: #1E293B;")
+            self.subtitle_label.setStyleSheet("color: #64748B;")
 
     def enterEvent(self, event):
-        self.animate_shadow(18)
+        if not self.isChecked():
+            self.animate_shadow(16)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
@@ -76,10 +103,6 @@ class ModuleButton(QPushButton):
         self.anim.setEndValue(target_radius)
         self.anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self.anim.start()
-
-    def setChecked(self, checked: bool):
-        super().setChecked(checked)
-        self.update_style()
 
 
 class View(QWidget):
@@ -97,17 +120,17 @@ class View(QWidget):
 
         # ========================= SIDEBAR =========================
         sidebar = QFrame()
-        sidebar.setFixedWidth(260)
+        sidebar.setFixedWidth(280)  # Слегка расширил для комфортного размещения подзаголовков
         sidebar.setObjectName("sidebar")
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 25))
+        shadow.setBlurRadius(25)
+        shadow.setColor(QColor(0, 0, 0, 15))
         shadow.setOffset(2, 0)
         sidebar.setGraphicsEffect(shadow)
 
         sidebar_layout = QVBoxLayout()
-        sidebar_layout.setSpacing(16)
-        sidebar_layout.setContentsMargins(16, 30, 16, 20)
+        sidebar_layout.setSpacing(20)
+        sidebar_layout.setContentsMargins(20, 30, 20, 20)
 
         # Логотип
         logo = QLabel("💰 FINANCE PRO")
@@ -117,7 +140,7 @@ class View(QWidget):
 
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("background-color: #E2E8F0; max-height: 1px;")
+        line.setStyleSheet("background-color: #F1F5F9; max-height: 1px;")
         sidebar_layout.addWidget(line)
 
         # Модули
@@ -127,24 +150,24 @@ class View(QWidget):
         modules_scroll.setStyleSheet("""
             QScrollArea { border: none; background: transparent; }
             QScrollBar:vertical {
-                background: #F1F5F9;
+                background: #F8FAFC;
                 width: 6px;
                 border-radius: 3px;
             }
             QScrollBar::handle:vertical {
-                background: #A5B4FC;
+                background: #CBD5E1;
                 border-radius: 3px;
                 min-height: 20px;
             }
-            QScrollBar::handle:vertical:hover { background: #818CF8; }
+            QScrollBar::handle:vertical:hover { background: #94A3B8; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)
 
         modules_widget = QWidget()
         modules_widget.setObjectName("modules_container")
         modules_layout = QVBoxLayout()
-        modules_layout.setSpacing(10)
-        modules_layout.setContentsMargins(0, 0, 0, 0)
+        modules_layout.setSpacing(12)
+        modules_layout.setContentsMargins(0, 0, 4, 0)  # Небольшой отступ справа для скролла
 
         self.module_buttons = []
         self.btn_group = QButtonGroup()
@@ -153,17 +176,17 @@ class View(QWidget):
         modules_data = [
             ("📊", "Учёт операций", "Доходы / расходы"),
             ("💰", "Управление бюджетом", "Планирование"),
-            ("📈", "Аналитика и отчётность", "KPI / графики"),
-            ("📚", "Справочники", "Категории, подрядчики"),
-            ("⚙️", "Настройки", "Система и данные"),
+            ("📈", "Аналитика", "KPI и графики"),
+            ("📚", "Справочники", "Категории, контрагенты"),
         ]
+
         for icon, title, subtitle in modules_data:
             btn = ModuleButton(icon, title, subtitle)
-            btn.setCheckable(True)
             modules_layout.addWidget(btn)
             self.module_buttons.append(btn)
             self.btn_group.addButton(btn)
 
+        modules_layout.addStretch()  # Прижимаем кнопки кверху
         modules_widget.setLayout(modules_layout)
         modules_scroll.setWidget(modules_widget)
         sidebar_layout.addWidget(modules_scroll)
@@ -172,19 +195,22 @@ class View(QWidget):
         info_frame = QFrame()
         info_frame.setObjectName("info_frame")
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(6)
+        info_layout.setSpacing(8)
+
         info_title = QLabel("ℹ️ О программе")
-        info_title.setStyleSheet("color: #4F46E5; font-weight: 700; font-size: 12px;")
+        info_title.setStyleSheet("color: #4F46E5; font-weight: 700; font-size: 13px;")
         info_layout.addWidget(info_title)
+
         for text in ["• Локальная база данных", "• Работа без интернета", "• Автосохранение"]:
             lbl = QLabel(text)
-            lbl.setStyleSheet("color: #64748B; font-size: 11px;")
+            lbl.setStyleSheet("color: #64748B; font-size: 12px;")
             info_layout.addWidget(lbl)
+
         info_frame.setLayout(info_layout)
         info_frame.setStyleSheet("""
             #info_frame {
                 background-color: #F8FAFC;
-                border-radius: 16px;
+                border-radius: 14px;
                 padding: 16px;
                 border: 1px solid #E2E8F0;
             }
@@ -199,22 +225,21 @@ class View(QWidget):
         self.module2 = Module2Widget(controller)  # Управление бюджетом (индекс 1)
         self.module3 = Module3Widget(controller)  # Аналитика (индекс 2)
         self.module4 = Module4Widget(controller)  # Справочники (индекс 3)
-        self.settings_module = SettingsWidget(controller)  # Настройки (индекс 4)
 
         self.stacked_widget.addWidget(self.module1)
         self.stacked_widget.addWidget(self.module2)
         self.stacked_widget.addWidget(self.module3)
         self.stacked_widget.addWidget(self.module4)
-        self.stacked_widget.addWidget(self.settings_module)
 
         # Синхронизация выбора модуля с кнопками
         self.btn_group.buttonClicked.connect(self.on_module_selected)
 
-        # === НОВАЯ СТРОКА: Подключаем Drill-down сигнал из Модуля 3 ===
+        # Подключаем Drill-down сигнал из Модуля 3
         self.module3.drill_down_requested.connect(self.navigate_to_operations_and_filter)
 
-        # По умолчанию – первый модуль
+        # Инициализация первого модуля
         self.module_buttons[0].setChecked(True)
+        self.module_buttons[0].update_style(True)
         self.stacked_widget.setCurrentIndex(0)
 
         main_layout.addWidget(sidebar)
@@ -226,7 +251,6 @@ class View(QWidget):
         idx = self.module_buttons.index(btn)
         self.stacked_widget.setCurrentIndex(idx)
 
-    # === НОВЫЙ МЕТОД ДЛЯ ОБРАБОТКИ КЛИКА ПО КРУГОВОЙ ДИАГРАММЕ ===
     def navigate_to_operations_and_filter(self, category_name: str):
         """
         Метод ловит сигнал из аналитики, откладывает переключение вкладки на 50 мс
@@ -255,46 +279,36 @@ class View(QWidget):
     def apply_styles(self):
         self.setStyleSheet("""
             #main_window {
-                background-color: #F5F6FA;
+                background-color: #F3F4F6;
             }
             QWidget {
-                font-family: 'Segoe UI';
+                font-family: 'Segoe UI', -apple-system, sans-serif;
                 font-size: 14px;
                 color: #1E293B;
             }
             #sidebar {
-                background-color: white;
+                background-color: #FFFFFF;
                 border-right: 1px solid #E2E8F0;
             }
             #logo {
-                font-size: 22px;
-                font-weight: 700;
+                font-size: 20px;
+                font-weight: 800;
                 color: #4F46E5;
-                padding: 15px 10px;
+                padding: 10px;
+                letter-spacing: 1px;
             }
             QTableWidget {
-                background-color: white;
-                border: none;
+                background-color: #FFFFFF;
+                border: 1px solid #E2E8F0;
                 border-radius: 12px;
                 gridline-color: #F1F5F9;
             }
             QHeaderView::section {
                 background-color: #F8FAFC;
                 border: none;
-                border-bottom: 1px solid #E2E8F0;
+                border-bottom: 2px solid #E2E8F0;
                 padding: 12px;
                 font-weight: 700;
+                color: #475569;
             }
-            QScrollBar:vertical {
-                background: #F1F5F9;
-                width: 8px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background: #CBD5E1;
-                border-radius: 4px;
-                min-height: 30px;
-            }
-            QScrollBar::handle:vertical:hover { background: #94A3B8; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)

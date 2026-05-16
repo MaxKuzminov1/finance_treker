@@ -340,8 +340,15 @@ class Module4Widget(QWidget):
 
     def add_item(self):
         is_cat = self.stacked.currentIndex() == 0
-        form = CategoryForm(self.controller) if is_cat else CounterpartyForm(self.controller)
-        if form.exec(): self.load_current_view()
+        sid = self.get_current_selected_id()
+
+        if is_cat:
+            form = CategoryForm(self.controller, initial_parent_id=sid)
+        else:
+            form = CounterpartyForm(self.controller, initial_parent_id=sid)
+
+        if form.exec():
+            self.load_current_view()
 
     def edit_item(self):
         sid = self.get_current_selected_id()

@@ -4,10 +4,11 @@ from .models import CategoryType, UserStatus
 
 
 class CategoryForm(QDialog):
-    def __init__(self, controller, cat_data=None):
+    def __init__(self, controller, cat_data=None, initial_parent_id=None):
         super().__init__()
         self.controller = controller
         self.cat_data = cat_data
+        self.initial_parent_id = initial_parent_id
         self.setWindowTitle("Редактирование категории" if cat_data else "Новая категория")
         self.setModal(True)
         self.setup_ui()
@@ -44,6 +45,9 @@ class CategoryForm(QDialog):
             idx = self.parent_combo.findData(self.cat_data.parent_id)
             if idx >= 0: self.parent_combo.setCurrentIndex(idx)
             self.limit_spin.setValue(self.cat_data.monthly_limit or 0.0)
+        elif self.initial_parent_id:
+            idx = self.parent_combo.findData(self.initial_parent_id)
+            if idx >= 0: self.parent_combo.setCurrentIndex(idx)
 
         btn_layout = QHBoxLayout()
         save_btn = QPushButton("✓ Сохранить")
@@ -73,11 +77,11 @@ class CategoryForm(QDialog):
 
 
 class CounterpartyForm(QDialog):
-    # Добавлено поле parent_id
-    def __init__(self, controller, cp_data=None):
+    def __init__(self, controller, cp_data=None, initial_parent_id=None):
         super().__init__()
         self.controller = controller
         self.cp_data = cp_data
+        self.initial_parent_id = initial_parent_id
         self.setWindowTitle("Контрагент")
         self.setModal(True)
         self.setup_ui()
@@ -116,6 +120,9 @@ class CounterpartyForm(QDialog):
             self.address_edit.setText(self.cp_data.address)
             self.req_edit.setText(self.cp_data.requisites)
             self.comment_edit.setText(self.cp_data.comment)
+        elif self.initial_parent_id:
+            idx = self.parent_combo.findData(self.initial_parent_id)
+            if idx >= 0: self.parent_combo.setCurrentIndex(idx)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         btn_box.accepted.connect(self.save)

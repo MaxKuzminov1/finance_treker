@@ -123,11 +123,11 @@ class ReferencesRepository:
     def get_counterparty_summary(self, cp_id: int) -> dict:
         cur = self.conn.cursor()
         try:
-            # Заглушка запроса к таблице транзакций (замените названия полей под вашу БД)
+            # ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЕ ПОЛЯ: total_amount и counterparty_id
             cur.execute("""
                 SELECT 
-                    SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) as total_paid,
-                    SUM(CASE WHEN type='income' THEN amount ELSE -amount END) as current_debt,
+                    SUM(CASE WHEN type='expense' THEN total_amount ELSE 0 END) as total_paid,
+                    SUM(CASE WHEN type='income' THEN total_amount ELSE -total_amount END) as current_debt,
                     MAX(date) as last_date
                 FROM transactions 
                 WHERE counterparty_id=%s
@@ -138,12 +138,12 @@ class ReferencesRepository:
                 "current_debt": row.get("current_debt") or 0.0,
                 "last_date": row.get("last_date")
             }
-        except:
+        except Exception as e:
+            print(f"❌ Ошибка SQL в get_counterparty_summary: {e}")
             return {"total_paid": 0.0, "current_debt": 0.0, "last_date": None}
         finally:
             cur.close()
 
-    # (Методы пользователей, ролей и настроек остаются без изменений)
     # ---------- Пользователи ----------
     def get_all_users(self) -> list:
         cur = self.conn.cursor()

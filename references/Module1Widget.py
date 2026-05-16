@@ -1,3 +1,4 @@
+# Module1Widget.py
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QLineEdit,
@@ -384,6 +385,10 @@ class Module1Widget(QWidget):
         self.table.setColumnWidth(7, 100)  # Остаток
         self.table.setColumnWidth(8, 100)  # Статус
 
+        # НАСТРОЙКА СТРОК (Увеличение высоты строк и скрытие служебного левого столбца)
+        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.verticalHeader().setVisible(False)
+
         table_layout.addWidget(self.table)
         table_card.setLayout(table_layout)
         main_layout.addWidget(table_card)
@@ -405,6 +410,9 @@ class Module1Widget(QWidget):
 
         # Загружаем категории
         self.load_categories_for_filter()
+
+        # Первичная автоматическая загрузка данных при запуске
+        self.refresh()
 
     def load_categories_for_filter(self):
         """Загрузка категорий для фильтра"""
@@ -511,7 +519,7 @@ class Module1Widget(QWidget):
             if db_filter and t.get("type") != db_filter:
                 continue
 
-            # CATEGORY
+            # CATEGORY (Исправлено разбиение строк из GROUP_CONCAT)
             cats = t.get("categories", [])
             cat_names = []
             if isinstance(cats, list):
@@ -521,17 +529,19 @@ class Module1Widget(QWidget):
                     else:
                         cat_names.append(str(c))
             elif isinstance(cats, str):
-                cat_names = [cats]
+                cat_names = [c.strip() for c in cats.split(',')]
 
             if category_filter != "Все категории":
                 if category_filter not in cat_names:
                     continue
 
-            # DATE
+            # DATE (Исправлено распознавание объектов datetime.date)
             raw_date = t.get("date")
             try:
                 if isinstance(raw_date, datetime):
                     trans_date = raw_date.date()
+                elif isinstance(raw_date, date):
+                    trans_date = raw_date
                 elif isinstance(raw_date, str):
                     trans_date = datetime.strptime(raw_date[:10], "%Y-%m-%d").date()
                 else:
@@ -560,12 +570,11 @@ class Module1Widget(QWidget):
             # ID
             self.table.setItem(i, 0, QTableWidgetItem(str(t.get("id", ""))))
 
-            # ДАТА - УБИРАЕМ ВРЕМЯ
+            # ДАТА (Исправлено форматирование)
             date_value = t.get("date", "")
-            if isinstance(date_value, datetime):
+            if isinstance(date_value, (datetime, date)):
                 date_str = date_value.strftime("%d.%m.%Y")
             elif isinstance(date_value, str):
-                # Берем только первые 10 символов (YYYY-MM-DD) и преобразуем в формат DD.MM.YYYY
                 if len(date_value) >= 10:
                     date_str = f"{date_value[8:10]}.{date_value[5:7]}.{date_value[0:4]}"
                 else:
@@ -586,15 +595,14 @@ class Module1Widget(QWidget):
             amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.table.setItem(i, 3, amount_item)
 
-            # Категории
-            cats = t.get("categories", [])
-            if isinstance(cats, list):
-                names = [str(c.get("name", "")) for c in cats if isinstance(c, dict)]
-            elif isinstance(cats, str):
-                names = [cats]
+            # Категории (Исправлен вывод объединенной строки)
+            cats_display = t.get("categories", "")
+            if isinstance(cats_display, list):
+                names = [str(c.get("name", "")) for c in cats_display if isinstance(c, dict)]
+                cats_str = ", ".join(names)
             else:
-                names = []
-            self.table.setItem(i, 4, QTableWidgetItem(", ".join(names)))
+                cats_str = str(cats_display) if cats_display else "Без категории"
+            self.table.setItem(i, 4, QTableWidgetItem(cats_str))
 
             # Комментарий
             self.table.setItem(i, 5, QTableWidgetItem(str(t.get("comment", ""))))
@@ -721,10 +729,10 @@ class Module1Widget(QWidget):
                     if amount == 0:
                         continue
 
-                    date = datetime.now().strftime("%Y-%m-%d")
+                    date_str_val = datetime.now().strftime("%Y-%m-%d")
                     if col_date and not pd.isna(row[col_date]):
                         try:
-                            date = pd.to_datetime(row[col_date]).strftime("%Y-%m-%d")
+                            date_str_val = pd.to_datetime(row[col_date]).strftime("%Y-%m-%d")
                         except:
                             pass
 
@@ -742,12 +750,12 @@ class Module1Widget(QWidget):
                         category = str(row[col_category])
 
                     transactions.append({
-                        "date": date,
+                        "date": date_str_val,
                         "type": ttype,
                         "total_amount": amount,
                         "comment": comment,
                         "categories": [{"name": category, "amount": amount}],
-                        "payments": [{"date": date, "amount": amount}]
+                        "payments": [{"date": date_str_val, "amount": amount}]
                     })
 
                 except Exception as e:
